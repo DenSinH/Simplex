@@ -1,8 +1,12 @@
 #include "frontend/frontend.h"
+#include "simplex/reader.h"
 
 
-int main() {
-    Frontend frontend;
+int main(int argc, char** argv) {
+    Reader reader(argv[1]);
+    Simplex simplex(reader.Read());
+
+    Frontend frontend(std::move(simplex));
 
     frontend.Run();
 

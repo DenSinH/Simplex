@@ -2,7 +2,7 @@
 
 #include "camera.h"
 #include "default.h"
-
+#include "simplex/simplex.h"
 
 
 struct Frontend {
@@ -11,6 +11,12 @@ struct Frontend {
 
     static constexpr float LookSensitivity = 0.2;
     static constexpr float MoveSensitivity = 0.1;
+
+    Simplex simplex;
+
+    Frontend(Simplex&& simplex) : simplex(std::move(simplex)) {
+
+    }
 
     void InitSDL();
     void InitOGL();
