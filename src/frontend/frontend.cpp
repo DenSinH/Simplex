@@ -1,10 +1,19 @@
 #include "frontend.h"
 
 #include <SDL.h>
+#include <imgui/imgui.h>
+#include "imgui_sdl/imgui_impl_sdl.h"
+#include "imgui_sdl/imgui_impl_opengl3.h"
 
 #include "shaders.inl"
 
+#include <stdexcept>
+
 constexpr float pi = 3.14159265;
+
+Frontend::Frontend(Simplex&& simplex) : simplex(std::move(simplex)) {
+    draw_type = GL_POINTS;
+}
 
 void Frontend::InitSDL() {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0) {
@@ -57,20 +66,46 @@ void Frontend::InitOGL() {
 
     glGenVertexArrays(1, &vao);
     glGenBuffers(1, &vbo);
+    glGenBuffers(1, &ebo);
 
     glBindVertexArray(vao);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(point3d) * simplex.points.size(), simplex.points.data(), GL_STATIC_DRAW);
 
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    std::vector<i32> indices = simplex.FindSimplexDrawIndices<0>(0);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * indices.size(), indices.data(), GL_STATIC_DRAW);
+
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
     glEnableVertexAttribArray(0);
     glEnable(GL_PROGRAM_POINT_SIZE);
+    glBindVertexArray(0);
+}
+
+void Frontend::InitImGui() {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+
+    // Initialize OpenGL loader
+    bool err = gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress) == 0;
+    if (err)
+    {
+        throw std::runtime_error("Failed to initialize OpenGL loader!");
+    }
+
+    // Setup Platform/Renderer bindings
+    const char *glsl_version = "#version 130";
+    ImGui_ImplSDL2_InitForOpenGL((SDL_Window*)window, gl_context);
+    ImGui_ImplOpenGL3_Init(glsl_version);
 }
 
 void Frontend::HandleInput() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-//            ImGui_ImplSDL2_ProcessEvent(&event);
+        ImGui_ImplSDL2_ProcessEvent(&event);
 
         switch (event.type) {
             case SDL_QUIT: {
@@ -112,9 +147,59 @@ void Frontend::HandleInput() {
     if (keyboard[SDL_SCANCODE_LSHIFT]) camera.pos -= glm::vec3(0, MoveSensitivity, 0);
 }
 
+void Frontend::DrawMenu() {
+    ImGui::SetNextWindowSize(ImVec2{400, 100}, ImGuiCond_Always);
+    if (!ImGui::Begin("Menu", &menu_open, ImGuiWindowFlags_NoResize)) {
+        ImGui::End();
+        return;
+    }
+
+    bool disabled = command.valid();
+    if (disabled) ImGui::BeginDisabled();
+    const char* items[] = {"0-dimensional", "1-dimensional", "2-dimensional"};
+    if (ImGui::Combo("dimension", &dimension, items, IM_ARRAYSIZE(items))) {
+        if (dimension == 0) {
+            next_draw_type = GL_POINTS;
+            command = std::async(&Simplex::FindSimplexDrawIndices<0>, &simplex, epsilon);
+        }
+        else if (dimension == 1) {
+            next_draw_type = GL_LINES;
+            command = std::async(&Simplex::FindSimplexDrawIndices<0>, &simplex, epsilon);
+        }
+        else if (dimension == 2) {
+            next_draw_type = GL_TRIANGLES;
+            command = std::async(&Simplex::FindSimplexDrawIndices<0>, &simplex, epsilon);
+        }
+    }
+    ImGui::SliderFloat("epsilon", &epsilon, 0, 5, "%.4f", ImGuiSliderFlags_Logarithmic);
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        // draw type doesn't change
+        next_draw_type = draw_type;
+        command = std::async(&Simplex::FindSimplexDrawIndices<0>, &simplex, epsilon);
+    }
+    if (disabled) ImGui::EndDisabled();
+
+    ImGui::End();
+}
+
+void Frontend::CheckCommand() {
+    if (!command.valid()) {
+        return;
+    }
+    if (command.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
+        return;
+    }
+
+    auto indices = command.get();
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * indices.size(), indices.data(), GL_STATIC_DRAW);
+    draw_type = next_draw_type;
+}
+
 void Frontend::Run() {
     InitSDL();
     InitOGL();
+    InitImGui();
 
     SDL_SetRelativeMouseMode((SDL_bool)trap_mouse);
     SDL_ShowCursor(!trap_mouse);
@@ -122,19 +207,19 @@ void Frontend::Run() {
     while (!shutdown) {
         HandleInput();
 
-            // Start the Dear ImGui frame
-//        ImGui_ImplOpenGL3_NewFrame();
-//        ImGui_ImplSDL2_NewFrame(window);
-//        ImGui::NewFrame();
+        // Start the Dear ImGui frame
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplSDL2_NewFrame((SDL_Window*)window);
+        ImGui::NewFrame();
 
-            // ImGui::ShowDemoWindow();
+        CheckCommand();
+        DrawMenu();
 
-            // Rendering
-//        ImGui::Render();
+        // ImGui example window
+//        ImGui::ShowDemoWindow();
 
-#ifdef SHOW_EXAMPLE_MENU
-            ImGui::ShowDemoWindow(NULL);
-#endif
+        // Rendering
+        ImGui::Render();
 
         glClearColor(0, 0, 0, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -149,22 +234,22 @@ void Frontend::Run() {
 
         glBindVertexArray(vao);
 
-        glDrawArrays(GL_POINTS, 0, simplex.points.size());
+        glDrawElements(draw_type, simplex.points.size(), GL_UNSIGNED_INT, nullptr);
 
         glBindVertexArray(0);
         glUseProgram(0);
 
         // then draw the imGui stuff over it
-//        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         // frameswap
         SDL_GL_SwapWindow((SDL_Window*)window);
     }
 
     // Cleanup
-//    ImGui_ImplOpenGL3_Shutdown();
-//    ImGui_ImplSDL2_Shutdown();
-//    ImGui::DestroyContext();
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplSDL2_Shutdown();
+    ImGui::DestroyContext();
 
     SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER);
     SDL_GL_DeleteContext(gl_context);

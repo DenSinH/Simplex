@@ -12,6 +12,9 @@ add_executable(Simplex
         main.cpp
 )
 
+file(GLOB imgui_src "modules/imgui/**.cpp")
+add_library(imgui ${imgui_src})
+
 include_directories(Simplex PUBLIC modules ${SDL2_INCLUDE_DIR} modules modules/glm include src)
 
 target_link_libraries(Simplex PRIVATE ${SDL2_LIBRARY})
@@ -19,4 +22,4 @@ target_link_libraries(Simplex PRIVATE ${SDL2_LIBRARY})
 add_subdirectory(src/frontend)
 add_subdirectory(src/simplex)
 
-target_link_libraries(Simplex PRIVATE frontend simplex)
+target_link_libraries(Simplex PRIVATE frontend simplex imgui)

@@ -4,6 +4,9 @@
 #include "default.h"
 #include "simplex/simplex.h"
 
+#include <future>
+#include <optional>
+
 
 struct Frontend {
     static constexpr int Width = 1280;
@@ -14,13 +17,8 @@ struct Frontend {
 
     Simplex simplex;
 
-    Frontend(Simplex&& simplex) : simplex(std::move(simplex)) {
+    Frontend(Simplex&& simplex);
 
-    }
-
-    void InitSDL();
-    void InitOGL();
-    void HandleInput();
     void Run();
 
 private:
@@ -36,4 +34,20 @@ private:
     u32 proj;
     u32 vao;
     u32 vbo;
+    u32 ebo;
+
+    void InitSDL();
+    void InitOGL();
+    void InitImGui();
+    void HandleInput();
+
+    bool menu_open = true;
+    int dimension = 0;
+    float epsilon = 0.1;
+    void DrawMenu();
+
+    u32 draw_type;
+    u32 next_draw_type;
+    std::future<std::vector<i32>> command{};
+    void CheckCommand();
 };

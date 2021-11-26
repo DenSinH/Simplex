@@ -2,7 +2,7 @@ find_package(SDL2 REQUIRED)
 
 message(STATUS "SDL2 at ${SDL2_INCLUDE_DIR}")
 
-add_library(frontend STATIC frontend.cpp)
+add_library(frontend STATIC frontend.cpp imgui_sdl/imgui_impl_sdl.cpp imgui_sdl/imgui_impl_opengl3.cpp)
 
 if (NOT WIN32)
     target_link_libraries(Simplex PRIVATE -ldl -lpthread)
