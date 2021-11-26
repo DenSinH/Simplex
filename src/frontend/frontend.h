@@ -2,7 +2,7 @@
 
 #include "camera.h"
 #include "default.h"
-#include "simplex/simplex.h"
+#include "simplex/compute.h"
 
 #include <future>
 #include <optional>
@@ -15,9 +15,9 @@ struct Frontend {
     static constexpr float LookSensitivity = 0.2;
     static constexpr float MoveSensitivity = 0.1;
 
-    Simplex simplex;
+    Compute simplex;
 
-    Frontend(Simplex&& simplex);
+    Frontend(Compute&& simplex);
 
     void Run();
 

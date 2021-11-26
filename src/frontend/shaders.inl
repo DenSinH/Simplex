@@ -31,6 +31,7 @@ const char* vertex_shader_source = R"(
 const char* fragment_shader_source = R"(
     #version 330 core
     out vec4 FragColor;
+
     in vec3 color;
 
     void main()
@@ -41,8 +42,9 @@ const char* fragment_shader_source = R"(
 
 static GLuint CompileShader(GLenum type, const char* source) {
     GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, 0);
+    glShaderSource(shader, 1, &source, nullptr);
     glCompileShader(shader);
+
     GLint compiled = 0;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
     if (!compiled) {

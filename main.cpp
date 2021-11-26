@@ -4,7 +4,7 @@
 
 int main(int argc, char** argv) {
     Reader reader(argv[1]);
-    Simplex simplex(reader.Read());
+    Compute simplex(reader.Read());
 
     Frontend frontend(std::move(simplex));
 

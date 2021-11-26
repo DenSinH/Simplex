@@ -5,8 +5,8 @@
 
 #include <vector>
 
-struct Simplex {
-    Simplex(std::vector<point3d>&& points);
+struct Compute {
+    Compute(std::vector<point3d>&& points);
 
     std::vector<point3d> points;
 

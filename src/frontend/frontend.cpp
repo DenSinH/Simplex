@@ -11,7 +11,7 @@
 
 constexpr float pi = 3.14159265;
 
-Frontend::Frontend(Simplex&& simplex) : simplex(std::move(simplex)) {
+Frontend::Frontend(Compute&& simplex) : simplex(std::move(simplex)) {
     draw_type = GL_POINTS;
 }
 
@@ -164,22 +164,22 @@ void Frontend::DrawMenu() {
     if (ImGui::Combo("dimension", &dimension, items, IM_ARRAYSIZE(items))) {
         if (dimension == 0) {
             next_draw_type = GL_POINTS;
-            command = std::async(&Simplex::FindSimplexDrawIndices<0>, &simplex, epsilon);
+            command = std::async(&Compute::FindSimplexDrawIndices<0>, &simplex, epsilon);
         }
         else if (dimension == 1) {
             next_draw_type = GL_LINES;
-            command = std::async(&Simplex::FindSimplexDrawIndices<1>, &simplex, epsilon);
+            command = std::async(&Compute::FindSimplexDrawIndices<1>, &simplex, epsilon);
         }
         else if (dimension == 2) {
             next_draw_type = GL_TRIANGLES;
-            command = std::async(&Simplex::FindSimplexDrawIndices<2>, &simplex, epsilon);
+            command = std::async(&Compute::FindSimplexDrawIndices<2>, &simplex, epsilon);
         }
     }
     ImGui::SliderFloat("epsilon", &epsilon, 0, 5, "%.4f", ImGuiSliderFlags_Logarithmic);
     if (ImGui::IsItemDeactivatedAfterEdit()) {
         // draw type doesn't change
         next_draw_type = draw_type;
-        command = std::async(&Simplex::FindSimplexDrawIndices<0>, &simplex, epsilon);
+        command = std::async(&Compute::FindSimplexDrawIndices<0>, &simplex, epsilon);
     }
     if (disabled) ImGui::EndDisabled();
 
