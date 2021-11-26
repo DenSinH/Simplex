@@ -78,8 +78,12 @@ void Frontend::InitOGL() {
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
     glEnableVertexAttribArray(0);
-    glEnable(GL_PROGRAM_POINT_SIZE);
     glBindVertexArray(0);
+
+    glEnable(GL_PROGRAM_POINT_SIZE);
+    glEnable(GL_POINT_SMOOTH);
+    glEnable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
 }
 
 void Frontend::InitImGui() {
@@ -164,11 +168,11 @@ void Frontend::DrawMenu() {
         }
         else if (dimension == 1) {
             next_draw_type = GL_LINES;
-            command = std::async(&Simplex::FindSimplexDrawIndices<0>, &simplex, epsilon);
+            command = std::async(&Simplex::FindSimplexDrawIndices<1>, &simplex, epsilon);
         }
         else if (dimension == 2) {
             next_draw_type = GL_TRIANGLES;
-            command = std::async(&Simplex::FindSimplexDrawIndices<0>, &simplex, epsilon);
+            command = std::async(&Simplex::FindSimplexDrawIndices<2>, &simplex, epsilon);
         }
     }
     ImGui::SliderFloat("epsilon", &epsilon, 0, 5, "%.4f", ImGuiSliderFlags_Logarithmic);
@@ -223,7 +227,7 @@ void Frontend::Run() {
 
         glClearColor(0, 0, 0, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glViewport(0, 0, 1280, 720);
+        glViewport(0, 0, Width, Height);
 
         glUseProgram(program);
 

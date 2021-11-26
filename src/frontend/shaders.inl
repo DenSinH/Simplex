@@ -10,23 +10,32 @@ const char* vertex_shader_source = R"(
 
     layout (location = 0) in vec3 pos;
 
+    out vec3 color;
+
     uniform mat4 view;
     uniform mat4 projection;
+
+    float rand(vec2 co){
+        return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+    }
 
     void main()
     {
         gl_Position = projection * view * vec4(pos, 1.0);
         gl_PointSize = 4.0;
+
+        color = vec3(rand(pos.xy), rand(pos.yx), rand(pos.xz));
     }
 )";
 
 const char* fragment_shader_source = R"(
     #version 330 core
     out vec4 FragColor;
+    in vec3 color;
 
     void main()
     {
-        FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+        FragColor = vec4(color, 0.1);
     }
 )";
 
