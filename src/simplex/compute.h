@@ -5,7 +5,7 @@
 #include "default.h"
 
 #include <vector>
-#include <unordered_set>
+#include <boost/unordered_set.hpp>
 
 template<size_t N>
 struct Compute {
@@ -16,7 +16,7 @@ struct Compute {
     }
 
     std::vector<point3d> points;
-    std::vector<std::unordered_set<simplex_t>> simplex_cache{};
+    std::vector<boost::unordered_set<simplex_t>> simplex_cache{};
 
     template<size_t n, class F>
     void ForEachSimplex(float epsilon, const F& func, bool clear_cache = true);
@@ -74,7 +74,7 @@ void Compute<N>::ForEachSimplex(float epsilon, const F& func, bool clear_cache) 
         }
     }
     else if (n == 1) {
-        std::unordered_set<simplex_t>& simplices = simplex_cache[0] = {};
+        auto& simplices = simplex_cache[0] = {};
         for (int i = 0; i < points.size(); i++) {
             for (int j = i + 1; j < points.size(); j++) {
                 if (Distance2(i, j) <= 4 * epsilon * epsilon) {
@@ -85,10 +85,10 @@ void Compute<N>::ForEachSimplex(float epsilon, const F& func, bool clear_cache) 
         }
     }
     else {
-        std::unordered_set<simplex_t>& simplices = simplex_cache[n - 1] = {};
+        auto& simplices = simplex_cache[n - 1] = {};
         ForEachSimplex<n - 1>(epsilon, [&](simplex_t s) {
             ForEachSimplex<n - 1>(epsilon, [&](simplex_t t) {
-                if (simplices.contains(s | t)) {
+                if (simplices.find(s | t) != simplices.end()) {
                     return;
                 }
 

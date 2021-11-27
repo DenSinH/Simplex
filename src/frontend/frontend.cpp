@@ -155,7 +155,7 @@ void Frontend::HandleInput() {
 }
 
 void Frontend::DrawMenu() {
-    ImGui::SetNextWindowSize(ImVec2{400, 100}, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2{400, 120}, ImGuiCond_Always);
     if (!ImGui::Begin("Menu", &menu_open, ImGuiWindowFlags_NoResize)) {
         ImGui::End();
         return;
@@ -177,15 +177,20 @@ void Frontend::DrawMenu() {
             next_draw_type = GL_TRIANGLES;
             command = &Compute<MAX_POINTS>::FindSimplexDrawIndices<2>;
         }
-        future = std::async(command, &compute, epsilon);
+        start = std::chrono::steady_clock::now();
+        future = std::async(std::launch::async, command, &compute, epsilon);
     }
-    ImGui::SliderFloat("epsilon", &epsilon, 0, 5, "%.4f", ImGuiSliderFlags_Logarithmic);
-    if (ImGui::IsItemDeactivatedAfterEdit()) {
+    bool change = ImGui::SliderFloat("epsilon", &epsilon, 0, 5, "%.4f", ImGuiSliderFlags_Logarithmic);
+    if (((dimension < 2) && change) || (!disabled && ImGui::IsItemDeactivatedAfterEdit())) {
         // draw type doesn't change
         next_draw_type = draw_type;
-        future = std::async(command, &compute, epsilon);
+        start = std::chrono::steady_clock::now();
+        future = std::async(std::launch::async, command, &compute, epsilon);
     }
     if (disabled) ImGui::EndDisabled();
+
+    ImGui::Text("%d simplices", no_vertices / (1 + dimension));
+    ImGui::Text("%lldms elapsed", std::chrono::duration_cast<std::chrono::milliseconds>(duration).count());
 
     ImGui::End();
 }
@@ -199,6 +204,7 @@ void Frontend::CheckCommand() {
     }
 
     auto indices = future.get();
+    duration = std::chrono::steady_clock::now() - start;
     no_vertices = indices.size() ;
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * indices.size(), indices.data(), GL_STATIC_DRAW);

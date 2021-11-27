@@ -6,6 +6,7 @@
 
 #include <future>
 #include <optional>
+#include <chrono>
 
 
 struct Frontend {
@@ -50,6 +51,8 @@ private:
     u32 next_draw_type;
     std::vector<i32> (Compute<MAX_POINTS>::*command)(float);
     size_t no_vertices;
+    std::chrono::time_point<std::chrono::steady_clock> start;
+    std::chrono::duration<double> duration = std::chrono::milliseconds(0);
     std::future<std::vector<i32>> future{};
     void CheckCommand();
 };

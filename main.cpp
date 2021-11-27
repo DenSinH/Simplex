@@ -10,5 +10,7 @@ int main(int argc, char** argv) {
 
     frontend.Run();
 
+    compute.FindSimplexDrawIndices<2>(0.6);
+
     return 0;
 }

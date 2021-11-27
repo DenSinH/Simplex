@@ -113,13 +113,19 @@ struct Simplex {
     }
 };
 
-namespace std {
 
 template<size_t N>
-struct hash<Simplex<N>> {
-    std::size_t operator()(const Simplex<N>& s) const noexcept {
-        return std::accumulate(s.points.begin(), s.points.end(), 0);
-    }
-};
-
+std::size_t hash_value(const Simplex<N>& s) noexcept {
+    return std::accumulate(s.points.begin(), s.points.end(), 0);
 }
+
+//namespace std {
+//
+//template<size_t N>
+//struct hash<Simplex<N>> {
+//    std::size_t operator()(const Simplex<N>& s) const noexcept {
+//        return std::accumulate(s.points.begin(), s.points.end(), 0);
+//    }
+//};
+//
+//}
