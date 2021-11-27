@@ -18,6 +18,7 @@ struct Compute {
 
     std::vector<point3d> points;
     int current_simplices;
+    std::array<std::array<bool, N>, N> one_simplex_cache{};
     std::vector<boost::unordered_set<simplex_t>> simplex_cache{};
 
     template<size_t n, class F>
@@ -57,7 +58,7 @@ template<size_t N>
 void Compute<N>::Find1Simplices(float epsilon) {
     auto& simplices = simplex_cache[0];
 
-    if (!simplex_cache[0].empty()) {
+    if (!simplices.empty()) {
         return;
     }
 
@@ -65,6 +66,8 @@ void Compute<N>::Find1Simplices(float epsilon) {
         for (int j = i + 1; j < points.size(); j++) {
             if (Distance2(i, j) <= 4 * epsilon * epsilon) {
                 simplices.insert(simplex_t{i, j});
+                one_simplex_cache[i][j] = true;
+                one_simplex_cache[j][i] = true;
             }
         }
     }
@@ -85,6 +88,7 @@ void Compute<N>::ForEachSimplex(float epsilon, const F& func, bool clear_cache) 
     // clear simplex cache if needed
     if (clear_cache) {
         simplex_cache = {};
+        one_simplex_cache = {};
     }
 
     if (simplex_cache.size() < n) {
@@ -123,7 +127,7 @@ void Compute<N>::ForEachSimplex(float epsilon, const F& func, bool clear_cache) 
 
                 if (s.ForEachPoint([&](int p) -> bool {
                     // check whether there is a 1-simplex for every point in the simplex
-                    if (simplex_cache[0].find(simplex_t{p, i}) != simplex_cache[0].end()) {
+                    if (one_simplex_cache[i][p]) {
                         return true;  // bad simplex, 1-simplex does not exist
                     }
                     return false;  // keep going, 1-simplex exists for this point
