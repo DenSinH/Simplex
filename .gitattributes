@@ -1,2 +1,2 @@
-module/**.* linguist-vendored=false
-imgui_sdl/**.* linguist-vendored=false
+modules/**/*.* linguist-vendored=false
+*/imgui_sdl/*.* linguist-vendored=false
