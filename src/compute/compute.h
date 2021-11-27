@@ -7,6 +7,7 @@
 #include <vector>
 #include <boost/unordered_set.hpp>
 
+
 template<size_t N>
 struct Compute {
     using simplex_t = Simplex<N>;
@@ -89,20 +90,31 @@ void Compute<N>::ForEachSimplex(float epsilon, const F& func, bool clear_cache) 
     }
     else {
         auto& simplices = simplex_cache[n - 1] = {};
+        ForEachSimplex<n - 1>(epsilon, [&](simplex_t s) {}, false);
         ForEachSimplex<n - 1>(epsilon, [&](simplex_t s) {
-            ForEachSimplex<n - 1>(epsilon, [&](simplex_t t) {
-                if (simplices.find(s | t) != simplices.end()) {
-                    return;
+            // try every other point
+            for (int i = 0; i < points.size(); i++) {
+                if (s[i]) [[unlikely]] {
+                    // point is already contained in the simplex
+                    continue;
+                }
+                auto next = s | simplex_t{i};
+                if (simplices.find(next) != simplices.end()) {
+                    // simplex is already found
+                    continue;
                 }
 
-                if ((s ^ t).Count() == 2) {
-                    auto [i, j] = (s ^ t).FindLow();
-                    if (Distance2(i ,j) <= 4 * epsilon * epsilon) {
-                        simplices.insert(s | t);
-                        func(s | t);
+                if (s.ForEachPoint([&](int p) -> bool {
+                    // check whether there is a 1-simplex for every point in the simplex
+                    if (simplex_cache[0].find(simplex_t{p, i}) != simplex_cache[0].end()) {
+                        return true;  // bad simplex, 1-simplex does not exist
                     }
+                    return false;  // keep going, 1-simplex exists for this point
+                })) {
+                    simplices.insert(next);
+                    func(next);
                 }
-            }, false);
+            }
         }, false);
     }
 }

@@ -24,7 +24,6 @@ add_library(imgui ${imgui_src})
 include_directories(Simplex PUBLIC modules modules/glm include src)
 include_directories(Simplex PUBLIC ${SDL2_INCLUDE_DIR} ${Boost_INCLUDE_DIR})
 
-
 target_link_libraries(Simplex PRIVATE ${Boost_LIBRARY})
 target_link_libraries(Simplex PRIVATE ${SDL2_LIBRARY})
 

@@ -6,11 +6,11 @@ int main(int argc, char** argv) {
     Reader reader(argv[1]);
     Compute<MAX_POINTS> compute(reader.Read());
 
-//    Frontend frontend(std::move(compute));
-//
-//    frontend.Run();
+    Frontend frontend(std::move(compute));
 
-    compute.FindSimplexDrawIndices<2>(1.6);
+    frontend.Run();
+
+//    compute.FindSimplexDrawIndices<2>(1.6);
 
     return 0;
 }

@@ -19,6 +19,51 @@
  *    the new simplex (S1 | S2) is again a valid simplex.
  * */
 
+namespace detail {
+
+/*
+ * For getting function argument types.
+ * */
+
+template<typename... Args>
+struct pack {
+
+};
+
+template<typename Callable> struct func;
+
+template<typename R, typename... Args>
+struct func<R(Args...)> {
+    using args_t = pack<Args...>;
+    using return_t = R;
+};
+
+template<typename R, typename... Args>
+struct func<R (*)(Args...)> {
+    using args_t = pack<Args...>;
+    using return_t = R;
+};
+
+template<typename R, typename C, typename... Args>
+struct func<R (C::*)(Args...)> {
+    using args_t = pack<Args...>;
+    using return_t = R;
+};
+
+template<typename R, typename C, typename... Args>
+struct func<R (C::*)(Args...) const> {
+    using args_t = pack<Args...>;
+    using return_t = R;
+};
+
+template<typename Callable>
+struct func {
+    using args_t = typename func<decltype(&Callable::operator())>::args_t;
+    using return_t = typename func<decltype(&Callable::operator())>::return_t;;
+};
+
+}
+
 template<size_t N>
 struct Simplex {
     static constexpr size_t bits = sizeof(u64) * 8;
@@ -33,6 +78,10 @@ struct Simplex {
 
     bool operator==(const Simplex<N>& other) const {
         return std::memcmp(points.data(), other.points.data(), points.size() * sizeof(u64)) == 0;
+    }
+
+    bool operator[](size_t index) const {
+        return (points[index / bits] & 1ull << (index % bits)) != 0;
     }
 
     Simplex& operator|=(const Simplex<N>& other) {
@@ -101,14 +150,25 @@ struct Simplex {
         return result;
     }
 
-    template<class F>
-    void ForEachPoint(const F& func) {
+    template<class F, typename T = typename detail::func<F>::return_t>
+    T ForEachPoint(const F& func) {
         int point = 0;
         for (auto section : points) {
             for (; section; section &= ~std::bit_floor(section)) {
-                func(point + bits - std::countl_zero(section) - 1);
+                if constexpr(std::is_same_v<T, void>) {
+                    func(point + bits - std::countl_zero(section) - 1);
+                }
+                else {
+                    T value = func(point + bits - std::countl_zero(section) - 1);
+                    if (value) {
+                        return value;
+                    }
+                }
             }
             point += bits;
+        }
+        if constexpr(!std::is_same_v<T, void>) {
+            return T{};
         }
     }
 };
