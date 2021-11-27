@@ -16,6 +16,7 @@ struct Compute {
     }
 
     std::vector<point3d> points;
+    int current_simplices;
     std::vector<boost::unordered_set<simplex_t>> simplex_cache{};
 
     template<size_t n, class F>
@@ -38,8 +39,10 @@ template<size_t n>
 std::vector<i32> Compute<N>::FindSimplexDrawIndices([[maybe_unused]] float epsilon) {
     std::vector<i32> indices = {};
     indices.reserve(n * points.size());
+    current_simplices = 0;
 
     ForEachSimplex<n>(epsilon, [&](simplex_t s) {
+        current_simplices++;
         s.ForEachPoint([&](int p) {
             indices.push_back(p);
         });

@@ -1,1 +1,0 @@
-add_library(simplex STATIC reader.cpp compute.h simplex.h)

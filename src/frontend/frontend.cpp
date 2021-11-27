@@ -189,8 +189,14 @@ void Frontend::DrawMenu() {
     }
     if (disabled) ImGui::EndDisabled();
 
-    ImGui::Text("%d simplices", no_vertices / (1 + dimension));
-    ImGui::Text("%lldms elapsed", std::chrono::duration_cast<std::chrono::milliseconds>(duration).count());
+    if (!future.valid()) {
+        ImGui::Text("%llu simplices", no_vertices / (1 + dimension));
+        ImGui::Text("%lldms elapsed", std::chrono::duration_cast<std::chrono::milliseconds>(duration).count());
+    }
+    else {
+        ImGui::Text("%d simplices", compute.current_simplices);
+        ImGui::Text("%lldms elapsed", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+    }
 
     ImGui::End();
 }

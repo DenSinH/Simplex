@@ -2,7 +2,7 @@
 
 #include "camera.h"
 #include "default.h"
-#include "simplex/compute.h"
+#include "compute/compute.h"
 
 #include <future>
 #include <optional>

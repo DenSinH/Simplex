@@ -29,6 +29,6 @@ target_link_libraries(Simplex PRIVATE ${Boost_LIBRARY})
 target_link_libraries(Simplex PRIVATE ${SDL2_LIBRARY})
 
 add_subdirectory(src/frontend)
-add_subdirectory(src/simplex)
+add_subdirectory(src/compute)
 
-target_link_libraries(Simplex PRIVATE frontend simplex imgui)
+target_link_libraries(Simplex PRIVATE frontend compute imgui)
