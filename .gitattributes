@@ -1,0 +1,2 @@
+module/**.* linguist-vendored=false
+imgui_sdl/**.* linguist-vendored=false
