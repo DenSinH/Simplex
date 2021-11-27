@@ -11,8 +11,10 @@
 
 constexpr float pi = 3.14159265;
 
-Frontend::Frontend(Compute&& simplex) : simplex(std::move(simplex)) {
+Frontend::Frontend(Compute<MAX_POINTS>&& _compute) : compute(std::move(_compute)) {
     draw_type = GL_POINTS;
+    no_vertices = compute.points.size();
+    command = &Compute<MAX_POINTS>::FindSimplexDrawIndices<0>;
 }
 
 void Frontend::InitSDL() {
@@ -70,20 +72,21 @@ void Frontend::InitOGL() {
 
     glBindVertexArray(vao);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(point3d) * simplex.points.size(), simplex.points.data(), GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-    std::vector<i32> indices = simplex.FindSimplexDrawIndices<0>(0);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * indices.size(), indices.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(point3d) * compute.points.size(), compute.points.data(), GL_STATIC_DRAW);
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
     glEnableVertexAttribArray(0);
-    glBindVertexArray(0);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    std::vector<i32> indices = compute.FindSimplexDrawIndices<0>(0);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * indices.size(), indices.data(), GL_STATIC_DRAW);
 
     glEnable(GL_PROGRAM_POINT_SIZE);
     glEnable(GL_POINT_SMOOTH);
     glEnable(GL_BLEND);
     glEnable(GL_DEPTH_TEST);
+
+    glBindVertexArray(0);
 }
 
 void Frontend::InitImGui() {
@@ -158,28 +161,29 @@ void Frontend::DrawMenu() {
         return;
     }
 
-    bool disabled = command.valid();
+    bool disabled = future.valid();
     if (disabled) ImGui::BeginDisabled();
     const char* items[] = {"0-dimensional", "1-dimensional", "2-dimensional"};
     if (ImGui::Combo("dimension", &dimension, items, IM_ARRAYSIZE(items))) {
         if (dimension == 0) {
             next_draw_type = GL_POINTS;
-            command = std::async(&Compute::FindSimplexDrawIndices<0>, &simplex, epsilon);
+            command = &Compute<MAX_POINTS>::FindSimplexDrawIndices<0>;
         }
         else if (dimension == 1) {
             next_draw_type = GL_LINES;
-            command = std::async(&Compute::FindSimplexDrawIndices<1>, &simplex, epsilon);
+            command = &Compute<MAX_POINTS>::FindSimplexDrawIndices<1>;
         }
         else if (dimension == 2) {
             next_draw_type = GL_TRIANGLES;
-            command = std::async(&Compute::FindSimplexDrawIndices<2>, &simplex, epsilon);
+            command = &Compute<MAX_POINTS>::FindSimplexDrawIndices<2>;
         }
+        future = std::async(command, &compute, epsilon);
     }
     ImGui::SliderFloat("epsilon", &epsilon, 0, 5, "%.4f", ImGuiSliderFlags_Logarithmic);
     if (ImGui::IsItemDeactivatedAfterEdit()) {
         // draw type doesn't change
         next_draw_type = draw_type;
-        command = std::async(&Compute::FindSimplexDrawIndices<0>, &simplex, epsilon);
+        future = std::async(command, &compute, epsilon);
     }
     if (disabled) ImGui::EndDisabled();
 
@@ -187,14 +191,15 @@ void Frontend::DrawMenu() {
 }
 
 void Frontend::CheckCommand() {
-    if (!command.valid()) {
+    if (!future.valid()) {
         return;
     }
-    if (command.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
+    if (future.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
         return;
     }
 
-    auto indices = command.get();
+    auto indices = future.get();
+    no_vertices = indices.size() ;
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * indices.size(), indices.data(), GL_STATIC_DRAW);
     draw_type = next_draw_type;
@@ -238,7 +243,7 @@ void Frontend::Run() {
 
         glBindVertexArray(vao);
 
-        glDrawElements(draw_type, simplex.points.size(), GL_UNSIGNED_INT, nullptr);
+        glDrawElements(draw_type, no_vertices, GL_UNSIGNED_INT, nullptr);
 
         glBindVertexArray(0);
         glUseProgram(0);

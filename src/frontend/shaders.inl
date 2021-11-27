@@ -24,7 +24,7 @@ const char* vertex_shader_source = R"(
         gl_Position = projection * view * vec4(pos, 1.0);
         gl_PointSize = 4.0;
 
-        color = vec3(rand(pos.xy), rand(pos.yx), rand(pos.xz));
+        color = vec3(0.5, 0.5, 0.5) + 0.5 * vec3(rand(pos.xy), rand(pos.yx), rand(pos.xz));
     }
 )";
 

@@ -15,9 +15,9 @@ struct Frontend {
     static constexpr float LookSensitivity = 0.2;
     static constexpr float MoveSensitivity = 0.1;
 
-    Compute simplex;
+    Compute<MAX_POINTS> compute;
 
-    Frontend(Compute&& simplex);
+    Frontend(Compute<MAX_POINTS>&& simplex);
 
     void Run();
 
@@ -48,6 +48,8 @@ private:
 
     u32 draw_type;
     u32 next_draw_type;
-    std::future<std::vector<i32>> command{};
+    std::vector<i32> (Compute<MAX_POINTS>::*command)(float);
+    size_t no_vertices;
+    std::future<std::vector<i32>> future{};
     void CheckCommand();
 };

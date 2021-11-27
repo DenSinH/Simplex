@@ -5,6 +5,10 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 set(CMAKE_CXX_STANDARD 20)
 
+find_package(SDL2 REQUIRED)
+
+message(STATUS "SDL2 at ${SDL2_INCLUDE_DIR}")
+
 add_compile_options("-O3")
 
 add_executable(Simplex

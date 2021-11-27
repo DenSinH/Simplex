@@ -4,9 +4,9 @@
 
 int main(int argc, char** argv) {
     Reader reader(argv[1]);
-    Compute simplex(reader.Read());
+    Compute<MAX_POINTS> compute(reader.Read());
 
-    Frontend frontend(std::move(simplex));
+    Frontend frontend(std::move(compute));
 
     frontend.Run();
 
