@@ -10,6 +10,7 @@ int main(int argc, char** argv) {
 
     frontend.Run();
 
+    // manual benchmark
 //    auto fut = std::async(std::launch::async, &Compute<MAX_POINTS>::FindSimplexDrawIndices<3>, &compute, 0.6);
 //    auto start = std::chrono::steady_clock::now();
 //    while (fut.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
@@ -21,6 +22,9 @@ int main(int argc, char** argv) {
 //    std::printf("\n\n");
 //    std::printf("%lldms\n", std::chrono::duration_cast<std::chrono::milliseconds>(duration).count());
 //    std::printf("%llu simplices\n", result.size());
+
+    // for AMD uProf
+//    compute.FindSimplexDrawIndices<3>(0.6);
 
     return 0;
 }

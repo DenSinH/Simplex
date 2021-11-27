@@ -22,6 +22,7 @@ struct Compute {
 
     template<size_t n, class F>
     void ForEachSimplex(float epsilon, const F& func, bool clear_cache = true);
+    void Find1Simplices(float epsilon);
 
     float Distance2(int i, int j) const {
         float dx = points[i][0] - points[j][0];
@@ -53,44 +54,60 @@ std::vector<i32> Compute<N>::FindSimplexDrawIndices([[maybe_unused]] float epsil
 
 
 template<size_t N>
+void Compute<N>::Find1Simplices(float epsilon) {
+    auto& simplices = simplex_cache[0];
+
+    if (!simplex_cache[0].empty()) {
+        return;
+    }
+
+    for (int i = 0; i < points.size(); i++) {
+        for (int j = i + 1; j < points.size(); j++) {
+            if (Distance2(i, j) <= 4 * epsilon * epsilon) {
+                simplices.insert(simplex_t{i, j});
+            }
+        }
+    }
+}
+
+
+template<size_t N>
 template<size_t n, class F>
 void Compute<N>::ForEachSimplex(float epsilon, const F& func, bool clear_cache) {
-    if (clear_cache) {
-        simplex_cache = {};
-    }
-
-    if constexpr(n != 0) {
-        if (simplex_cache.size() < n) {
-            simplex_cache.resize(n);
-        }
-
-        if (!simplex_cache[n - 1].empty()) {
-            for (simplex_t s : simplex_cache[n - 1]) {
-                func(s);
-            }
-            return;
-        }
-    }
-
+    // 0 simplices are always just the points
     if constexpr(n == 0) {
         for (int i = 0; i < points.size(); i++) {
             func(simplex_t{i});
         }
+        return;
     }
-    else if (n == 1) {
-        auto& simplices = simplex_cache[0] = {};
-        for (int i = 0; i < points.size(); i++) {
-            for (int j = i + 1; j < points.size(); j++) {
-                if (Distance2(i, j) <= 4 * epsilon * epsilon) {
-                    simplices.insert(simplex_t{i, j});
-                    func(simplex_t{i, j});
-                }
-            }
+
+    // clear simplex cache if needed
+    if (clear_cache) {
+        simplex_cache = {};
+    }
+
+    if (simplex_cache.size() < n) {
+        simplex_cache.resize(n);
+    }
+
+    // 1 simplices are special since we can use them for the higher order simplices
+    if constexpr(n == 1) {
+        Find1Simplices(epsilon);
+    }
+
+    // use cached simplices
+    if (!simplex_cache[n - 1].empty()) {
+        for (simplex_t s : simplex_cache[n - 1]) {
+            func(s);
         }
+        return;
     }
-    else {
+
+    if constexpr(n > 1) {
         auto& simplices = simplex_cache[n - 1] = {};
-        ForEachSimplex<n - 1>(epsilon, [&](simplex_t s) {}, false);
+        // first find all 1-simplices
+        Find1Simplices(epsilon);
         ForEachSimplex<n - 1>(epsilon, [&](simplex_t s) {
             // try every other point
             for (int i = 0; i < points.size(); i++) {
