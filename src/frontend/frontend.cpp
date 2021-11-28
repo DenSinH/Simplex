@@ -180,8 +180,7 @@ void Frontend::DrawMenu() {
         start = std::chrono::steady_clock::now();
         future = std::async(std::launch::async, command, &compute, epsilon);
     }
-    bool change = ImGui::SliderFloat("epsilon", &epsilon, 0, 5, "%.4f", ImGuiSliderFlags_Logarithmic);
-    if (((dimension < 2) && change) || (!disabled && ImGui::IsItemDeactivatedAfterEdit())) {
+    if (ImGui::SliderFloat("epsilon", &epsilon, 0, 5, "%.4f", ImGuiSliderFlags_Logarithmic)) {
         // draw type doesn't change
         next_draw_type = draw_type;
         start = std::chrono::steady_clock::now();
@@ -255,6 +254,7 @@ void Frontend::Run() {
 
         glBindVertexArray(vao);
 
+        glDrawArrays(GL_POINTS, 0, compute.points.size());
         glDrawElements(draw_type, no_vertices, GL_UNSIGNED_INT, nullptr);
 
         glBindVertexArray(0);

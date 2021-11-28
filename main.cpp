@@ -11,7 +11,7 @@ int main(int argc, char** argv) {
     frontend.Run();
 
     // manual benchmark
-//    auto fut = std::async(std::launch::async, &Compute<MAX_POINTS>::FindSimplexDrawIndices<3>, &compute, 0.6);
+//    auto fut = std::async(std::launch::async, &Compute<MAX_POINTS>::FindSimplexDrawIndices<3>, &compute, 1.6);
 //    auto start = std::chrono::steady_clock::now();
 //    while (fut.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
 //        std::printf("%d\n", compute.current_simplices);
