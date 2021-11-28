@@ -151,7 +151,7 @@ struct Simplex {
     }
 
     template<class F, typename T = typename detail::func<F>::return_t>
-    T ForEachPoint(const F& func) {
+    T ForEachPoint(const F& func) const {
         int point = 0;
         for (auto section : points) {
             for (; section; section &= ~std::bit_floor(section)) {
@@ -176,5 +176,14 @@ struct Simplex {
 
 template<size_t N>
 std::size_t hash_value(const Simplex<N>& s) noexcept {
-    return std::accumulate(s.points.begin(), s.points.end(), 0);
+    // this hash value works for up to log_N(2^64) points
+    // if we use N = 512, then this gives us about 64 / 9 = 7 points
+    // after that the hash will slow down somewhat
+    size_t result = 0;
+    size_t multiplier = 1;
+    s.ForEachPoint([&](int p) {
+        result += p * multiplier;
+        multiplier *= N;
+    });
+    return result; // std::accumulate(s.points.begin(), s.points.end(), 0);
 }
