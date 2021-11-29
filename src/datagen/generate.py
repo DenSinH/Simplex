@@ -14,5 +14,5 @@ if __name__ == '__main__':
     circle = lambda x: (math.cos(x), math.sin(x), 0)
 
     with open("points.csv", "w+") as f:
-        for p in generate(circle, 100, bound=3.2):
+        for p in generate(circle, 200, bound=3.2):
             f.write(",".join(str(coord) for coord in p) + "\n")

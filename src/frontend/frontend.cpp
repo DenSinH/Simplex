@@ -155,13 +155,14 @@ void Frontend::HandleInput() {
 }
 
 void Frontend::DrawMenu() {
-    ImGui::SetNextWindowSize(ImVec2{400, 120}, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2{400, 155}, ImGuiCond_Always);
     if (!ImGui::Begin("Menu", &menu_open, ImGuiWindowFlags_NoResize)) {
         ImGui::End();
         return;
     }
 
-    bool disabled = future.valid();
+    bool disabled = simplex_indices_future.valid() || homology_basis_future.valid();
+
     if (disabled) ImGui::BeginDisabled();
     const char* items[] = {"0-dimensional", "1-dimensional", "2-dimensional"};
     if (ImGui::Combo("dimension", &dimension, items, IM_ARRAYSIZE(items))) {
@@ -178,17 +179,32 @@ void Frontend::DrawMenu() {
             command = &Compute<MAX_POINTS>::FindSimplexDrawIndices<2>;
         }
         start = std::chrono::steady_clock::now();
-        future = std::async(std::launch::async, command, &compute, epsilon);
+        simplex_indices_future = std::async(std::launch::async, command, &compute, epsilon);
     }
     if (ImGui::SliderFloat("epsilon", &epsilon, 0, 5, "%.4f", ImGuiSliderFlags_Logarithmic)) {
         // draw type doesn't change
         next_draw_type = draw_type;
         start = std::chrono::steady_clock::now();
-        future = std::async(std::launch::async, command, &compute, epsilon);
+        simplex_indices_future = std::async(std::launch::async, command, &compute, epsilon);
+    }
+    if (dimension > 0) {
+        if (ImGui::Button(("homology H" + std::to_string(dimension - 1)).c_str())) {
+            homology_dim = dimension;
+            homology_basis = {};
+            if (dimension == 1) {
+                homology_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindHn<0>, &compute, epsilon);
+            }
+            else {
+
+            }
+        }
+
+        ImGui::SameLine();
+        ImGui::Text("dim(H%d) = %lld", homology_dim - 1, homology_basis.size());
     }
     if (disabled) ImGui::EndDisabled();
 
-    if (!future.valid()) {
+    if (!simplex_indices_future.valid()) {
         ImGui::Text("%llu simplices", no_vertices / (1 + dimension));
         ImGui::Text("%lldms elapsed", std::chrono::duration_cast<std::chrono::milliseconds>(duration).count());
     }
@@ -200,20 +216,32 @@ void Frontend::DrawMenu() {
     ImGui::End();
 }
 
-void Frontend::CheckCommand() {
-    if (!future.valid()) {
+void Frontend::CheckSimplexIndexCommand() {
+    if (!simplex_indices_future.valid()) {
         return;
     }
-    if (future.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
+    if (simplex_indices_future.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
         return;
     }
 
-    auto indices = future.get();
+    auto indices = simplex_indices_future.get();
     duration = std::chrono::steady_clock::now() - start;
     no_vertices = indices.size() ;
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * indices.size(), indices.data(), GL_STATIC_DRAW);
     draw_type = next_draw_type;
+}
+
+
+void Frontend::CheckHomologyBasisCommand() {
+    if (!homology_basis_future.valid()) {
+        return;
+    }
+    if (homology_basis_future.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
+        return;
+    }
+
+    homology_basis = homology_basis_future.get();
 }
 
 void Frontend::Run() {
@@ -232,7 +260,8 @@ void Frontend::Run() {
         ImGui_ImplSDL2_NewFrame((SDL_Window*)window);
         ImGui::NewFrame();
 
-        CheckCommand();
+        CheckSimplexIndexCommand();
+        CheckHomologyBasisCommand();
         DrawMenu();
 
         // ImGui example window

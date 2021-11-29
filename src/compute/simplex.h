@@ -67,7 +67,7 @@ struct func {
 template<size_t N>
 struct Simplex {
     static constexpr size_t bits = sizeof(u64) * 8;
-    std::array<u64, (N + bits - 1)/ bits> points;
+    std::array<u64, (N + bits - 1) / bits> points;
 
     Simplex() = default;
 
@@ -78,6 +78,15 @@ struct Simplex {
 
     bool operator==(const Simplex<N>& other) const {
         return std::memcmp(points.data(), other.points.data(), points.size() * sizeof(u64)) == 0;
+    }
+
+    operator bool() const {
+        for (auto section : points) {
+            if (section) {
+                return true;
+            }
+        }
+        return false;
     }
 
     bool operator[](size_t index) const {
@@ -118,11 +127,25 @@ struct Simplex {
         return count;
     }
 
-    std::pair<int, int> FindLow() const {
+    int FindLow() const {
+        int count = 0;
+        int i;
+        for (auto section : points) {
+            if (section) {
+                int bit = std::countr_zero(section);
+                return count + bit;
+            }
+            count += bits;
+        }
+        return -1;
+    }
+
+    std::pair<int, int> FindLow2() const {
         // find lowest 2 set bits
         std::pair<int, int> result;
         int count = 0;
-        for (int i = 0; i < points.size(); i++) {
+        int i;
+        for (i = 0; i < points.size(); i++) {
             auto section = points[i];
             if (section) {
                 int bit = std::countr_zero(section);
@@ -133,20 +156,21 @@ struct Simplex {
                     result.second = count + std::countr_zero(section ^ (1ull << bit));
                     return result;
                 }
-                else {
-                    count += bits;
-                    for (int j = i + 1; j < points.size(); j++) {
-                        section = points[j];
-                        if (section) {
-                            result.second = count + std::countr_zero(section);
-                            return result;
-                        }
-                        count += bits;
-                    }
-                }
+                break;
             }
             count += bits;
         }
+
+        count += bits;
+        for (int j = i + 1; j < points.size(); j++) {
+            auto section = points[j];
+            if (section) {
+                result.second = count + std::countr_zero(section);
+                return result;
+            }
+            count += bits;
+        }
+
         return result;
     }
 
@@ -185,5 +209,5 @@ std::size_t hash_value(const Simplex<N>& s) noexcept {
         result += p * multiplier;
         multiplier *= N;
     });
-    return result; // std::accumulate(s.points.begin(), s.points.end(), 0);
+    return result;
 }

@@ -53,6 +53,11 @@ private:
     size_t no_vertices;
     std::chrono::time_point<std::chrono::steady_clock> start;
     std::chrono::duration<double> duration = std::chrono::milliseconds(0);
-    std::future<std::vector<i32>> future{};
-    void CheckCommand();
+    std::future<std::vector<i32>> simplex_indices_future{};
+    void CheckSimplexIndexCommand();
+
+    int homology_dim = 0;
+    std::vector<typename Compute<MAX_POINTS>::simplex_t> homology_basis{};
+    std::future<std::vector<typename Compute<MAX_POINTS>::simplex_t>> homology_basis_future{};
+    void CheckHomologyBasisCommand();
 };
