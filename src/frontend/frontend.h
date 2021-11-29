@@ -56,8 +56,19 @@ private:
     std::future<std::vector<i32>> simplex_indices_future{};
     void CheckSimplexIndexCommand();
 
-    int homology_dim = 0;
-    std::vector<typename Compute<MAX_POINTS>::simplex_t> homology_basis{};
-    std::future<std::vector<typename Compute<MAX_POINTS>::simplex_t>> homology_basis_future{};
+
+    using simplex_t = typename Compute<MAX_POINTS>::simplex_t;
+    using column_t = typename Compute<MAX_POINTS>::column_t;
+    using basis_t = typename Compute<MAX_POINTS>::basis_t;
+    enum class HomologyComputeState {
+        None, B, Z
+    };
+
+    HomologyComputeState homology_state;
+    int homology_dim;
+    basis_t b_basis{};
+    basis_t z_basis{};
+    basis_t h_basis{};
+    std::future<std::pair<basis_t, basis_t>> bz_basis_future{};
     void CheckHomologyBasisCommand();
 };

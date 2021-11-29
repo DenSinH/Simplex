@@ -6,6 +6,8 @@
 #include <bit>
 #include <numeric>
 #include <cstring>
+#include <boost/range/combine.hpp>
+#include <boost/foreach.hpp>
 
 /*
  * Idea: have a bitset of n bits, each representing a point.
@@ -80,13 +82,36 @@ struct Simplex {
         return std::memcmp(points.data(), other.points.data(), points.size() * sizeof(u64)) == 0;
     }
 
-    operator bool() const {
-        for (auto section : points) {
-            if (section) {
+    bool operator<(const Simplex<N>& other) const {
+        // lexographic ordering
+        int i = 0, j = 0;
+        u64 si, sj;
+        BOOST_FOREACH(boost::tie(si, sj), boost::combine(points, other.points)) {
+            while (si && sj) {
+                if (std::countr_zero(si) < std::countr_zero(sj)) {
+                    return true;
+                }
+                else if (std::countr_zero(si) == std::countr_zero(sj)) {
+                    const auto lowest_bit = 1ull << std::countr_zero(si);
+                    si ^= lowest_bit;
+                    sj ^= lowest_bit;
+                }
+                else {
+                    return false;
+                }
+            }
+            if (si) {
                 return true;
+            }
+            if (sj) {
+                return false;
             }
         }
         return false;
+    }
+
+    operator bool() const {
+        return std::any_of(points.begin(), points.end(), [](const u64& v) { return v != 0; });
     }
 
     bool operator[](size_t index) const {
@@ -100,7 +125,7 @@ struct Simplex {
         return *this;
     }
 
-    Simplex operator|(const Simplex<N>& other) {
+    Simplex operator|(const Simplex<N>& other) const {
         Simplex result = *this;
         result |= other;
         return result;
@@ -113,23 +138,18 @@ struct Simplex {
         return *this;
     }
 
-    Simplex operator^(const Simplex<N>& other) {
+    Simplex operator^(const Simplex<N>& other) const {
         Simplex result = *this;
         result ^= other;
         return result;
     }
 
     int Count() const {
-        int count = 0;
-        for (const auto& section : points) {
-            count += std::popcount(section);
-        }
-        return count;
+        return std::accumulate(points.begin(), points.end(), 0, std::popcount<u64>);
     }
 
     int FindLow() const {
         int count = 0;
-        int i;
         for (auto section : points) {
             if (section) {
                 int bit = std::countr_zero(section);

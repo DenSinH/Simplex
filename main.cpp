@@ -1,5 +1,6 @@
 #include "frontend/frontend.h"
 #include "compute/reader.h"
+#include "compute/column.h"
 
 #include <memory>
 

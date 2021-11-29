@@ -2,16 +2,20 @@
 
 #include "point.h"
 #include "simplex.h"
+#include "column.h"
 #include "default.h"
 
 #include <vector>
 #include <boost/unordered_set.hpp>
+#include <boost/unordered_map.hpp>
 #include <boost/container/static_vector.hpp>
 
 
 template<size_t N>
 struct Compute {
     using simplex_t = Simplex<N>;
+    using column_t = Column<N>;
+    using basis_t = std::vector<column_t>;
 
     Compute(const std::vector<point3d>& points) : points(points) {
 
@@ -32,9 +36,9 @@ struct Compute {
     void Find1Simplices(float epsilon);
     template<size_t n>
     std::vector<i32> FindSimplexDrawIndices(float epsilon);
-    std::vector<simplex_t> FindH0(float epsilon);
-    template<size_t n>
-    std::vector<simplex_t> FindHn(float epsilon);
+    std::pair<basis_t, basis_t> FindBZ0(float epsilon);
+    template<int n>
+    std::pair<basis_t, basis_t> FindBZn(float epsilon);
 
     float Distance2(int i, int j) const {
         float dx = points[i][0] - points[j][0];
@@ -142,9 +146,9 @@ void Compute<N>::ForEachSimplex(float epsilon, const F& func) {
                     continue;
                 }
 
-                if (s.ForEachPoint([&](int p) -> bool {
+                if (!s.ForEachPoint([&](int p) -> bool {
                     // check whether there is a 1-simplex for every point in the simplex
-                    if (one_simplex_cache[i][p]) {
+                    if (!one_simplex_cache[i][p]) {
                         return true;  // bad simplex, 1-simplex does not exist
                     }
                     return false;  // keep going, 1-simplex exists for this point
@@ -159,38 +163,111 @@ void Compute<N>::ForEachSimplex(float epsilon, const F& func) {
 
 
 template<size_t N>
-std::vector<typename Compute<N>::simplex_t> Compute<N>::FindH0(float epsilon) {
-    Find1Simplices(epsilon);
-
+std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>::FindBZ0(float epsilon) {
+    // low -> column
     // at most N points
     // store low -> simplex
-    boost::container::static_vector<std::optional<simplex_t>, N> B(points.size());
+    using b_matrix_t = boost::container::static_vector<std::optional<std::pair<simplex_t, simplex_t>>, N>;
+    // higher dimensional simplex -> 1-simplex column (starts as diagonal)
+    using z_matrix_t = boost::unordered_map<simplex_t, column_t>;
 
-    ForEachSimplex<1>(epsilon, [&](simplex_t s) {
+    // store low -> simplex
+    b_matrix_t B(points.size());
+    // simplex -> column
+    z_matrix_t Z{};
+    // basis results (can be constructed while finding them)
+    basis_t b_basis{};
+    basis_t z_basis{};
+
+    ForEachSimplex<1>(epsilon, [&](const simplex_t s) {
+        auto b_col = s;
+        auto z_col = column_t{s};
         int low;
-        for (low = s.FindLow(); s && B[low].has_value(); low = s.FindLow()) {
-            s ^= B[low].value();
+        for (low = b_col.FindLow(); b_col && B[low].has_value(); low = b_col.FindLow()) {
+            const auto& [low_s, low_col] = B[low].value();
+            b_col ^= low_col;
+
+            // low has been found before, so we know that low_s is in Z
+            z_col ^= Z.at(low_s);
         }
-        if (s) {
-            B[low] = s;
+        if (b_col) {
+            B[low] = std::make_pair(s, b_col);
+
+            // this column will never be added to again and is non-zero
+            b_basis.push_back(column_t::BoundaryOf(s));
+
+            // this column has not been added to Z yet (low never found)
+            Z.emplace(s, z_col);
+        }
+        else {
+            // column will never be read from again in Z, since it ends up being zero
+            // it is part of the z_basis though
+            z_basis.push_back(z_col);
         }
     });
 
-    std::vector<simplex_t> result;
-    for (int i = 0; i < B.size(); i++) {
-        if (!B[i].has_value()) {
-            result.push_back(simplex_t{i});
-        }
-    }
-    return result;
+    // basis for B{n} is all non-zero columns
+    // basis for Z{n + 1} is all zero-columns, which we have already kept track of
+    return std::make_pair(b_basis, z_basis);
 }
 
 
 template<size_t N>
-template<size_t n>
-std::vector<typename Compute<N>::simplex_t> Compute<N>::FindHn(float epsilon) {
-    if constexpr(n == 0) {
-        return FindH0(epsilon);
+template<int n>
+std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>::FindBZn(float epsilon) {
+    if constexpr(n == -1) {
+        basis_t z_basis{};
+        for (int i = 0; i < points.size(); i++) {
+            z_basis.push_back(column_t{simplex_t{i}});
+        }
+        return std::make_pair(basis_t{}, z_basis);
     }
-    return {};
+    else if constexpr(n == 0) {
+        return FindBZ0(epsilon);
+    }
+    else {
+        // low -> column
+        using b_matrix_t = boost::unordered_map<simplex_t, std::pair<simplex_t, column_t>>;
+        // higher dimensional simplex -> column (starts at diagonal)
+        using z_matrix_t = boost::unordered_map<simplex_t, column_t>;
+
+        // store low -> simplex
+        b_matrix_t B{};
+        // simplex -> column
+        z_matrix_t Z{};
+        // basis results (can be constructed while finding them)
+        basis_t b_basis{};
+        basis_t z_basis{};
+
+        ForEachSimplex<n + 1>(epsilon, [&](simplex_t s) {
+            auto b_col = column_t::BoundaryOf(s);
+            auto z_col = column_t{s};
+            simplex_t low;
+            for (low = b_col.FindLow(); b_col && (B.find(low) != B.end()); low = b_col.FindLow()) {
+                const auto& [low_s, low_col] = B.at(low);
+                b_col ^= low_col;
+
+                // low has been found before, so we know that low_s is in Z
+                z_col ^= Z.at(low_s);
+            }
+            if (b_col) {
+                B.emplace(low, std::make_pair(s, b_col));
+
+                // this column will never be added to again and is non-zero
+                b_basis.push_back(b_col);
+
+                // this column has not been added to Z yet (low never found)
+                Z.emplace(s, z_col);
+            }
+            else {
+                // column will never be read from again in Z, since it ends up being zero
+                // it is part of the z_basis though
+                z_basis.push_back(z_col);
+            }
+        });
+
+        // basis for B{n} is all non-zero columns
+        // basis for Z{n + 1} is all zero-columns, which we have already kept track of
+        return std::make_pair(b_basis, z_basis);
+    }
 }

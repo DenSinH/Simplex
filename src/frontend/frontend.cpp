@@ -11,10 +11,13 @@
 
 constexpr float pi = 3.14159265;
 
-Frontend::Frontend(Compute<MAX_POINTS>&& _compute) : compute(std::move(_compute)) {
-    draw_type = GL_POINTS;
-    no_vertices = compute.points.size();
-    command = &Compute<MAX_POINTS>::FindSimplexDrawIndices<0>;
+Frontend::Frontend(Compute<MAX_POINTS>&& _compute) :
+        compute(std::move(_compute)),
+        draw_type{GL_POINTS},
+        no_vertices{compute.points.size()},
+        command{&Compute<MAX_POINTS>::FindSimplexDrawIndices<0>},
+        homology_dim{0} {
+
 }
 
 void Frontend::InitSDL() {
@@ -161,7 +164,7 @@ void Frontend::DrawMenu() {
         return;
     }
 
-    bool disabled = simplex_indices_future.valid() || homology_basis_future.valid();
+    bool disabled = simplex_indices_future.valid() || bz_basis_future.valid();
 
     if (disabled) ImGui::BeginDisabled();
     const char* items[] = {"0-dimensional", "1-dimensional", "2-dimensional"};
@@ -174,7 +177,7 @@ void Frontend::DrawMenu() {
             next_draw_type = GL_LINES;
             command = &Compute<MAX_POINTS>::FindSimplexDrawIndices<1>;
         }
-        else if (dimension == 2) {
+        else {
             next_draw_type = GL_TRIANGLES;
             command = &Compute<MAX_POINTS>::FindSimplexDrawIndices<2>;
         }
@@ -189,18 +192,21 @@ void Frontend::DrawMenu() {
     }
     if (dimension > 0) {
         if (ImGui::Button(("homology H" + std::to_string(dimension - 1)).c_str())) {
-            homology_dim = dimension;
-            homology_basis = {};
-            if (dimension == 1) {
-                homology_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindHn<0>, &compute, epsilon);
-            }
-            else {
+            homology_dim = dimension - 1;
+            z_basis = {};
+            b_basis = {};
 
+            // first calculate B then Z
+            homology_state = HomologyComputeState::B;
+            switch (homology_dim) {
+                case 0: bz_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindBZn<0>, &compute, epsilon); break;
+                case 1: bz_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindBZn<1>, &compute, epsilon); break;
+                default: break;
             }
         }
 
         ImGui::SameLine();
-        ImGui::Text("dim(H%d) = %lld", homology_dim - 1, homology_basis.size());
+        ImGui::Text("dim(H%d) = %lld", homology_dim, z_basis.size() - b_basis.size());
     }
     if (disabled) ImGui::EndDisabled();
 
@@ -234,14 +240,36 @@ void Frontend::CheckSimplexIndexCommand() {
 
 
 void Frontend::CheckHomologyBasisCommand() {
-    if (!homology_basis_future.valid()) {
+    if (!bz_basis_future.valid()) {
         return;
     }
-    if (homology_basis_future.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
+    if (bz_basis_future.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
         return;
     }
 
-    homology_basis = homology_basis_future.get();
+    auto [b, z] = bz_basis_future.get();
+    if (homology_state == HomologyComputeState::Z) {
+        homology_state = HomologyComputeState::None;
+        z_basis = std::move(z);
+        h_basis = {};
+
+        std::copy_if(z_basis.begin(), z_basis.end(), std::back_inserter(h_basis), [&](const column_t& zc) {
+            simplex_t low = zc.FindLow();
+            return !std::any_of(b_basis.begin(), b_basis.end(), [&](const column_t& bc) {
+                return bc.FindLow() == low;
+            });
+        });
+    }
+    else {
+        homology_state = HomologyComputeState::Z;
+        b_basis = std::move(b);
+
+        switch (homology_dim) {
+            case 0: bz_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindBZn<-1>, &compute, epsilon); break;
+            case 1: bz_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindBZn<0>, &compute, epsilon); break;
+            default: break;
+        }
+    }
 }
 
 void Frontend::Run() {
