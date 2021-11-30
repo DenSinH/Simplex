@@ -198,6 +198,7 @@ void Frontend::DrawMenu() {
 
             // first calculate B then Z
             homology_state = HomologyComputeState::B;
+            start = std::chrono::steady_clock::now();
             switch (homology_dim) {
                 case 0: bz_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindBZn<0>, &compute, epsilon); break;
                 case 1: bz_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindBZn<1>, &compute, epsilon); break;
@@ -210,7 +211,7 @@ void Frontend::DrawMenu() {
     }
     if (disabled) ImGui::EndDisabled();
 
-    if (!simplex_indices_future.valid()) {
+    if (!simplex_indices_future.valid() && !bz_basis_future.valid()) {
         ImGui::Text("%llu simplices", no_vertices / (1 + dimension));
         ImGui::Text("%lldms elapsed", std::chrono::duration_cast<std::chrono::milliseconds>(duration).count());
     }
@@ -250,6 +251,7 @@ void Frontend::CheckHomologyBasisCommand() {
     auto [b, z] = bz_basis_future.get();
     if (homology_state == HomologyComputeState::Z) {
         homology_state = HomologyComputeState::None;
+        duration = std::chrono::steady_clock::now() - start;
         z_basis = std::move(z);
         h_basis = {};
 
