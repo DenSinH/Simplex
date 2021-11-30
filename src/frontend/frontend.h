@@ -17,9 +17,9 @@ struct Frontend {
     static constexpr float LookSensitivity = 0.2;
     static constexpr float MoveSensitivity = 0.1;
 
-    Compute<MAX_POINTS> compute;
+    std::unique_ptr<ComputeBase> compute;
 
-    Frontend(Compute<MAX_POINTS>&& simplex);
+    Frontend(std::unique_ptr<ComputeBase>&& simplex);
 
     void Run();
 
@@ -58,21 +58,12 @@ private:
     void CheckSimplexIndexCommand();
 
 
-    using point_t = typename Compute<MAX_POINTS>::point_t;
-    using simplex_t = typename Compute<MAX_POINTS>::simplex_t;
-    using column_t = typename Compute<MAX_POINTS>::column_t;
-    using basis_t = typename Compute<MAX_POINTS>::basis_t;
-    enum class HomologyComputeState {
-        None, B, Z
-    };
+    using point_t = typename ComputeBase::point_t;
 
-    HomologyComputeState homology_state;
     int homology_dim = 0;
     bool show_homology = false;
-    size_t hno_vertices = 0;
-    basis_t b_basis{};
-    basis_t z_basis{};
-    basis_t h_basis{};
-    std::future<std::pair<basis_t, basis_t>> bz_basis_future{};
+    size_t h_basis_size = 0;
+    size_t h_basis_vertices = 0;
+    std::future<std::pair<size_t, std::vector<i32>>> h_basis_future{};
     void CheckHomologyBasisCommand();
 };

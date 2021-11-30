@@ -8,9 +8,9 @@
 int main(int argc, char** argv) {
     auto reader = std::make_unique<Reader>(argv[1]);
     auto points = reader->Read();
-    auto compute = std::make_unique<Compute<MAX_POINTS>>(points);
+    std::unique_ptr<ComputeBase> compute = std::make_unique<Compute<MAX_POINTS>>(points);
 
-    auto frontend = std::make_unique<Frontend>(std::move(*compute));
+    auto frontend = std::make_unique<Frontend>(std::move(compute));
 
     frontend->Run();
 

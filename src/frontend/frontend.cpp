@@ -14,9 +14,9 @@
 
 constexpr float pi = 3.14159265;
 
-Frontend::Frontend(Compute<MAX_POINTS>&& _compute) :
+Frontend::Frontend(std::unique_ptr<ComputeBase>&& _compute) :
         compute(std::move(_compute)),
-        no_vertices{compute.points.size()} {
+        no_vertices{compute->points.size()} {
 
 }
 
@@ -76,13 +76,13 @@ void Frontend::InitOGL() {
 
     glBindVertexArray(vao);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(point_t) * compute.points.size(), compute.points.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(point_t) * compute->points.size(), compute->points.data(), GL_STATIC_DRAW);
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(point_t), nullptr);
     glEnableVertexAttribArray(0);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[0]);
-    std::vector<i32> indices = compute.FindSimplexDrawIndices(0, 0)[0];
+    std::vector<i32> indices = compute->FindSimplexDrawIndices(0, 0)[0];
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * indices.size(), indices.data(), GL_STATIC_DRAW);
 
     glEnable(GL_PROGRAM_POINT_SIZE);
@@ -165,7 +165,7 @@ void Frontend::DrawMenu() {
         return;
     }
 
-    bool disabled = simplex_indices_future.valid() || bz_basis_future.valid();
+    bool disabled = simplex_indices_future.valid() || h_basis_future.valid();
 
     if (disabled) ImGui::BeginDisabled();
     const char* dimension_items[] = {"0-dimensional", "1-dimensional", "2-dimensional", "3-dimensional"};
@@ -173,78 +173,57 @@ void Frontend::DrawMenu() {
     if (ImGui::Combo("dimension", &dimension, dimension_items, IM_ARRAYSIZE(dimension_items))) {
         if (old_dim != dimension) {
             // reset h basis (no longer valid)
-            h_basis = {};
+            h_basis_vertices = 0;
+            h_basis_size = 0;
             show_homology = false;
 
             // start computation for simplex indices
             start = std::chrono::steady_clock::now();
             simplex_indices_future = std::async(
-                    std::launch::async, &Compute<MAX_POINTS>::FindSimplexDrawIndices, &compute, epsilon, dimension
+                    std::launch::async, &ComputeBase::FindSimplexDrawIndices, compute.get(), epsilon, dimension
             );
         }
     }
     if (ImGui::SliderFloat("epsilon", &epsilon, 0, 5, "%.4f", ImGuiSliderFlags_Logarithmic)) {
         // reset h basis (no longer valid)
-        h_basis = {};
+        h_basis_vertices = 0;
+        h_basis_size = 0;
         show_homology = false;
 
         start = std::chrono::steady_clock::now();
         simplex_indices_future = std::async(
-                std::launch::async, &Compute<MAX_POINTS>::FindSimplexDrawIndices, &compute, epsilon, dimension
+                std::launch::async, &ComputeBase::FindSimplexDrawIndices, compute.get(), epsilon, dimension
         );
     }
 
     if (dimension > 0) {
         if (ImGui::Button(("homology H" + std::to_string(dimension - 1)).c_str())) {
             homology_dim = dimension - 1;
-            z_basis = {};
-            b_basis = {};
-            h_basis = {};
+            h_basis_size = 0;
+            h_basis_vertices = 0;
 
             // first calculate B then Z
-            homology_state = HomologyComputeState::B;
             start = std::chrono::steady_clock::now();
-            detail::static_for<int, 0, MAX_HOMOLOGY_DIM>([&](auto i) {
-                if (homology_dim == i) {
-                    bz_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindBZn<i>, &compute, epsilon);
-                }
-            });
+            h_basis_future = std::async(std::launch::async, &ComputeBase::FindHBasisDrawIndices, compute.get(), epsilon, homology_dim);
         }
 
         ImGui::SameLine();
-        ImGui::Text("dim(H%d) = %lld", homology_dim, h_basis.size());
-        if (h_basis.size()) {
+        ImGui::Text("dim(H%d) = %lld", homology_dim, h_basis_size);
+        if (h_basis_vertices) {
             ImGui::SameLine();
             if (ImGui::Checkbox("show homology", &show_homology)) {
-                if (show_homology) {
-                    std::vector<i32> draw_indices{};
-                    for (const auto& c : h_basis) {
-                        for (const auto& s : c.data) {
-                            s.ForEachPoint([&draw_indices](int p) {
-                                draw_indices.push_back(p);
-                            });
-                        }
-                    }
 
-                    hno_vertices = draw_indices.size();
-
-                    glBindVertexArray(vao);
-                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, hebo);
-                    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * hno_vertices, draw_indices.data(), GL_STATIC_DRAW);
-                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-                    glBindVertexArray(0);
-                }
             }
         }
     }
     if (disabled) ImGui::EndDisabled();
 
-    if (!simplex_indices_future.valid() && !bz_basis_future.valid()) {
-        ImGui::Text("%d %d-simplices", compute.current_simplices, dimension);
+    if (!simplex_indices_future.valid() && !h_basis_future.valid()) {
+        ImGui::Text("%d %d-simplices", compute->current_simplices, dimension);
         ImGui::Text("%lldms elapsed", std::chrono::duration_cast<std::chrono::milliseconds>(duration).count());
     }
     else {
-        ImGui::Text("%d simplices", compute.current_simplices);
+        ImGui::Text("%d simplices", compute->current_simplices);
         ImGui::Text("%lldms elapsed", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
     }
 
@@ -282,30 +261,21 @@ void Frontend::CheckSimplexIndexCommand() {
 
 
 void Frontend::CheckHomologyBasisCommand() {
-    if (!bz_basis_future.valid()) {
+    if (!h_basis_future.valid()) {
         return;
     }
-    if (bz_basis_future.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
+    if (h_basis_future.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
         return;
     }
 
-    auto [b, z] = bz_basis_future.get();
-    if (homology_state == HomologyComputeState::Z) {
-        homology_state = HomologyComputeState::None;
-        duration = std::chrono::steady_clock::now() - start;
-        z_basis = std::move(z);
-        h_basis = compute.FindHBasis(b_basis, z_basis);
-    }
-    else {
-        homology_state = HomologyComputeState::Z;
-        b_basis = std::move(b);
-
-        detail::static_for<int, 0, MAX_HOMOLOGY_DIM>([&](auto i) {
-            if (homology_dim == i) {
-                bz_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindBZn<i - 1>, &compute, epsilon);
-            }
-        });
-    }
+    auto [h_basis_size_, h_basis] = h_basis_future.get();
+    h_basis_size = h_basis_size_;
+    h_basis_vertices = h_basis.size();
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, hebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * h_basis_vertices, h_basis.data(), GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 }
 
 void Frontend::Run() {
@@ -360,7 +330,7 @@ void Frontend::Run() {
         }
         else {
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, hebo);
-            glDrawElements(draw_type[homology_dim], hno_vertices, GL_UNSIGNED_INT, nullptr);
+            glDrawElements(draw_type[homology_dim], h_basis_vertices, GL_UNSIGNED_INT, nullptr);
         }
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);

@@ -2,6 +2,8 @@
 
 #include <boost/preprocessor/repetition/repeat.hpp>
 
+#include "static_for.h"
+
 
 template<size_t N>
 void Compute<N>::ClearSimplexCache(float epsilon) {
@@ -17,10 +19,10 @@ template<size_t n>
 std::vector<i32> Compute<N>::FindSimplexDrawIndicesImpl([[maybe_unused]] float epsilon) {
     std::vector<i32> indices = {};
     indices.reserve(n * points.size());
-    current_simplices = 0;
+    this->ComputeBase::current_simplices = 0;
 
     ForEachSimplex<n>(epsilon, [&](simplex_t s) {
-        current_simplices++;
+        this->ComputeBase::current_simplices++;
         s.ForEachPoint([&](int p) {
             indices.push_back(p);
         });
@@ -216,6 +218,29 @@ typename Compute<N>::basis_t Compute<N>::FindHBasis(const basis_t& B, const basi
     }
     return std::move(result);
 }
+
+template<size_t N>
+std::pair<size_t, std::vector<i32>> Compute<N>::FindHBasisDrawIndices(float epsilon, int n) {
+    basis_t h_basis;
+    detail::static_for<int, 0, MAX_HOMOLOGY_DIM>([&](auto i) {
+        if (i == n) {
+            auto [b_basis, z_] = FindBZn<i>(epsilon);
+            auto [b_, z_basis] = FindBZn<i - 1>(epsilon);
+            h_basis = FindHBasis(b_basis, z_basis);
+        }
+    });
+
+    std::vector<i32> result{};
+    for (const auto& c : h_basis) {
+        for (const auto& s : c.data) {
+            s.ForEachPoint([&result](int p) {
+                result.push_back(p);
+            });
+        }
+    }
+    return std::make_pair(h_basis.size(), std::move(result));
+}
+
 
 #define INSTANTIATE_COMPUTE_METHODS(_, m, n) \
     template std::pair<typename Compute<MIN_POINTS << (n)>::basis_t, typename Compute<MIN_POINTS << (n)>::basis_t> Compute<MIN_POINTS << (n)>::FindBZn<(m) - 1>(float epsilon);

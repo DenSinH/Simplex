@@ -11,20 +11,34 @@
 #include <boost/container/static_vector.hpp>
 
 
-template<size_t N>
-struct Compute {
-    using simplex_t = Simplex<N>;
-    using column_t = Column<N>;
-    using basis_t = std::vector<column_t>;
+struct ComputeBase {
     using point_t = point_max;
 
-    Compute(const std::vector<point_t>& points) : points(points) {
+    ComputeBase(const std::vector<point_t>& points) : points(points) {
 
     }
 
-    const std::vector<point_t>& points;
+    virtual ~ComputeBase() = default;
 
-    int current_simplices;
+    const std::vector<point_t>& points;
+    int current_simplices = 0;
+
+    virtual boost::container::static_vector<std::vector<i32>, 3> FindSimplexDrawIndices(float epsilon, int n) = 0;
+    virtual std::pair<size_t, std::vector<i32>> FindHBasisDrawIndices(float epsilon, int n) = 0;
+};
+
+
+template<size_t N>
+struct Compute final : ComputeBase {
+    using simplex_t = Simplex<N>;
+    using column_t = Column<N>;
+    using basis_t = std::vector<column_t>;
+
+    Compute(const std::vector<point_t>& points) : ComputeBase(points) {
+
+    }
+
+    ~Compute() final = default;
 
     float last_epsilon = -1;
     std::array<std::array<bool, N>, N> one_simplex_cache{};
@@ -34,10 +48,11 @@ struct Compute {
 
     template<size_t n, class F>
     void ForEachSimplex(float epsilon, const F& func);
-    boost::container::static_vector<std::vector<i32>, 3> FindSimplexDrawIndices(float epsilon, int n);
+    boost::container::static_vector<std::vector<i32>, 3> FindSimplexDrawIndices(float epsilon, int n) final;
     template<int n>
     std::pair<basis_t, basis_t> FindBZn(float epsilon);
     basis_t FindHBasis(const basis_t& B, const basis_t& Z) const;
+    std::pair<size_t, std::vector<i32>> FindHBasisDrawIndices(float epsilon, int n) final;
 
 private:
     template<size_t n>
