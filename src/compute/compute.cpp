@@ -108,6 +108,17 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
         }
     });
 
+    // reduce B basis (unique low)
+    z_matrix_t reduced{};
+    for (auto& c : b_basis) {
+        auto low = c.FindLow();
+        while (reduced.find(low) != reduced.end()) {
+            c ^= reduced.at(low);
+            low = c.FindLow();
+        }
+        reduced.emplace(low, c);
+    }
+
     // basis for B{n} is all non-zero columns
     // basis for Z{n + 1} is all zero-columns, which we have already kept track of
     return std::make_pair(b_basis, z_basis);
@@ -172,6 +183,38 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
         // basis for Z{n + 1} is all zero-columns, which we have already kept track of
         return std::make_pair(b_basis, z_basis);
     }
+}
+
+template<size_t N>
+typename Compute<N>::basis_t Compute<N>::FindHBasis(const basis_t& B, const basis_t& Z) const {
+    // reduce Z basis to a basis of H
+    // basically just sweep the lowest elements
+    boost::unordered_map<simplex_t, column_t> reduced{};
+    for (column_t c : Z) {
+        auto low = c.FindLow();
+        while (reduced.find(low) != reduced.end()) {
+            c ^= reduced.at(low);
+            low = c.FindLow();
+        }
+
+#ifndef NDEBUG
+        if (!c) [[unlikely]] {
+            throw std::runtime_error("Bad basis for Z");
+        }
+#endif
+        reduced.emplace(low, c);
+    }
+
+    for (const column_t& c : B) {
+        auto low = c.FindLow();
+        reduced.erase(low);
+    }
+
+    basis_t result{};
+    for (auto [s, c] : reduced) {
+        result.push_back(c);
+    }
+    return std::move(result);
 }
 
 #define INSTANTIATE_COMPUTE_METHODS(_, m, n) \

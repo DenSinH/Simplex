@@ -196,7 +196,7 @@ void Frontend::DrawMenu() {
         }
 
         ImGui::SameLine();
-        ImGui::Text("dim(H%d) = %lld", homology_dim, z_basis.size() - b_basis.size());
+        ImGui::Text("dim(H%d) = %lld", homology_dim, h_basis.size());
     }
     if (disabled) ImGui::EndDisabled();
 
@@ -255,14 +255,7 @@ void Frontend::CheckHomologyBasisCommand() {
         homology_state = HomologyComputeState::None;
         duration = std::chrono::steady_clock::now() - start;
         z_basis = std::move(z);
-        h_basis = {};
-
-        std::copy_if(z_basis.begin(), z_basis.end(), std::back_inserter(h_basis), [&](const column_t& zc) {
-            simplex_t low = zc.FindLow();
-            return !std::any_of(b_basis.begin(), b_basis.end(), [&](const column_t& bc) {
-                return bc.FindLow() == low;
-            });
-        });
+        h_basis = compute.FindHBasis(b_basis, z_basis);
     }
     else {
         homology_state = HomologyComputeState::Z;

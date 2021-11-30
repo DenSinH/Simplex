@@ -37,6 +37,7 @@ struct Compute {
     boost::container::static_vector<std::vector<i32>, 3> FindSimplexDrawIndices(float epsilon, int n);
     template<int n>
     std::pair<basis_t, basis_t> FindBZn(float epsilon);
+    basis_t FindHBasis(const basis_t& B, const basis_t& Z) const;
 
 private:
     template<size_t n>

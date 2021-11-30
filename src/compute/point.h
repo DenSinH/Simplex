@@ -1,5 +1,7 @@
 #pragma once
 
+#include "default.h"
+
 #include <array>
 
 
@@ -25,4 +27,4 @@ private:
 };
 
 using point3d = Point<float, 3>;
-using point_max = Point<float, 8>;
+using point_max = Point<float, MAX_POINT_DIM>;

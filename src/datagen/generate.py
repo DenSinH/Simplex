@@ -11,8 +11,9 @@ def generate(parameterization: callable, num: int, bound: float = 100, stddev: f
 
 if __name__ == '__main__':
     import math
-    circles = lambda x, y: (0.5 * math.cos(x), 0.5 * math.sin(x), 0) if y < 0.5 else (1 + 0.5 * math.cos(x), 0.5 * math.sin(x), 0)
+    # circles = lambda x, y: (0.5 * math.cos(x), 0.5 * math.sin(x), 0) if y < 0.5 else (1 + 0.5 * math.cos(x), 0.5 * math.sin(x), 0)
+    circles = lambda x: (math.cos(x), math.sin(x), 0)
 
     with open("points.csv", "w+") as f:
-        for p in generate(circles, 100, bound=3.2, stddev=0.02):
+        for p in generate(circles, 10, bound=3.2, stddev=0.02):
             f.write(",".join(str(coord) for coord in p) + "\n")
