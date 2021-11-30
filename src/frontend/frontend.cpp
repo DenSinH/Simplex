@@ -13,8 +13,7 @@ constexpr float pi = 3.14159265;
 
 Frontend::Frontend(Compute<MAX_POINTS>&& _compute) :
         compute(std::move(_compute)),
-        no_vertices{compute.points.size()},
-        homology_dim{0} {
+        no_vertices{compute.points.size()} {
 
 }
 
@@ -70,6 +69,7 @@ void Frontend::InitOGL() {
     glGenVertexArrays(1, &vao);
     glGenBuffers(1, &vbo);
     glGenBuffers(3, ebo.data());
+    glGenBuffers(1, &hebo);
 
     glBindVertexArray(vao);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -166,19 +166,26 @@ void Frontend::DrawMenu() {
 
     if (disabled) ImGui::BeginDisabled();
     const char* dimension_items[] = {"0-dimensional", "1-dimensional", "2-dimensional"};
+    auto old_dim = dimension;
     if (ImGui::Combo("dimension", &dimension, dimension_items, IM_ARRAYSIZE(dimension_items))) {
-        start = std::chrono::steady_clock::now();
-        simplex_indices_future = std::async(
-                std::launch::async, &Compute<MAX_POINTS>::FindSimplexDrawIndices, &compute, epsilon, dimension
-        );
+        if (old_dim != dimension) {
+            // reset h basis (no longer valid)
+            h_basis = {};
+
+            // start computation for simplex indices
+            start = std::chrono::steady_clock::now();
+            simplex_indices_future = std::async(
+                    std::launch::async, &Compute<MAX_POINTS>::FindSimplexDrawIndices, &compute, epsilon, dimension
+            );
+        }
     }
     if (ImGui::SliderFloat("epsilon", &epsilon, 0, 5, "%.4f", ImGuiSliderFlags_Logarithmic)) {
-        // draw type doesn't change
         start = std::chrono::steady_clock::now();
         simplex_indices_future = std::async(
                 std::launch::async, &Compute<MAX_POINTS>::FindSimplexDrawIndices, &compute, epsilon, dimension
         );
     }
+
     if (dimension > 0) {
         if (ImGui::Button(("homology H" + std::to_string(dimension - 1)).c_str())) {
             homology_dim = dimension - 1;
@@ -197,6 +204,30 @@ void Frontend::DrawMenu() {
 
         ImGui::SameLine();
         ImGui::Text("dim(H%d) = %lld", homology_dim, h_basis.size());
+        if (h_basis.size()) {
+            ImGui::SameLine();
+            if (ImGui::Button("show homology")) {
+                show_homology ^= true;
+                if (show_homology) {
+                    std::vector<i32> draw_indices{};
+                    for (const auto& c : h_basis) {
+                        for (const auto& s : c.data) {
+                            s.ForEachPoint([&draw_indices](int p) {
+                                draw_indices.push_back(p);
+                            });
+                        }
+                    }
+
+                    hno_vertices = draw_indices.size();
+
+                    glBindVertexArray(vao);
+                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, hebo);
+                    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * hno_vertices, draw_indices.data(), GL_STATIC_DRAW);
+                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+                    glBindVertexArray(0);
+                }
+            }
+        }
     }
     if (disabled) ImGui::EndDisabled();
 
@@ -311,12 +342,17 @@ void Frontend::Run() {
         static constexpr u32 draw_type[] = {
                 GL_POINTS, GL_LINES, GL_TRIANGLES
         };
-        for (int i = 0; i < no_vertices.size(); i++) {
-            if (no_vertices[i]) {
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[i]);
-                glDrawArrays(GL_POINTS, 0, compute.points.size());
-                glDrawElements(draw_type[i], no_vertices[i], GL_UNSIGNED_INT, nullptr);
+        if (!show_homology || homology_dim > 2) {
+            for (int i = 0; i < no_vertices.size(); i++) {
+                if (no_vertices[i]) {
+                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[i]);
+                    glDrawElements(draw_type[i], no_vertices[i], GL_UNSIGNED_INT, nullptr);
+                }
             }
+        }
+        else {
+            glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, hebo);
+            glDrawElements(draw_type[homology_dim], hno_vertices, GL_UNSIGNED_INT, nullptr);
         }
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);

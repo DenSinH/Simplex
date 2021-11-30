@@ -37,6 +37,7 @@ private:
     u32 vao;
     u32 vbo;
     std::array<u32, 3> ebo;
+    u32 hebo;
 
     void InitSDL();
     void InitOGL();
@@ -66,7 +67,9 @@ private:
     };
 
     HomologyComputeState homology_state;
-    int homology_dim;
+    int homology_dim = 0;
+    bool show_homology = false;
+    size_t hno_vertices = 0;
     basis_t b_basis{};
     basis_t z_basis{};
     basis_t h_basis{};
