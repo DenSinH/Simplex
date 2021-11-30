@@ -16,7 +16,7 @@ add_compile_options("-Ofast -fno-fast-math -march=native")
 add_executable(Simplex
         modules/glad/glad.c
         main.cpp
-)
+        include/static_for.h)
 
 file(GLOB imgui_src "modules/imgui/**.cpp")
 add_library(imgui ${imgui_src})

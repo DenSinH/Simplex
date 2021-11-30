@@ -1,13 +1,16 @@
 #include "frontend.h"
 
+#include "static_for.h"
+
 #include <SDL.h>
 #include <imgui/imgui.h>
 #include "imgui_sdl/imgui_impl_sdl.h"
 #include "imgui_sdl/imgui_impl_opengl3.h"
 
+#include <stdexcept>
+
 #include "shaders.inl"
 
-#include <stdexcept>
 
 constexpr float pi = 3.14159265;
 
@@ -165,12 +168,13 @@ void Frontend::DrawMenu() {
     bool disabled = simplex_indices_future.valid() || bz_basis_future.valid();
 
     if (disabled) ImGui::BeginDisabled();
-    const char* dimension_items[] = {"0-dimensional", "1-dimensional", "2-dimensional"};
+    const char* dimension_items[] = {"0-dimensional", "1-dimensional", "2-dimensional", "3-dimensional"};
     auto old_dim = dimension;
     if (ImGui::Combo("dimension", &dimension, dimension_items, IM_ARRAYSIZE(dimension_items))) {
         if (old_dim != dimension) {
             // reset h basis (no longer valid)
             h_basis = {};
+            show_homology = false;
 
             // start computation for simplex indices
             start = std::chrono::steady_clock::now();
@@ -180,6 +184,10 @@ void Frontend::DrawMenu() {
         }
     }
     if (ImGui::SliderFloat("epsilon", &epsilon, 0, 5, "%.4f", ImGuiSliderFlags_Logarithmic)) {
+        // reset h basis (no longer valid)
+        h_basis = {};
+        show_homology = false;
+
         start = std::chrono::steady_clock::now();
         simplex_indices_future = std::async(
                 std::launch::async, &Compute<MAX_POINTS>::FindSimplexDrawIndices, &compute, epsilon, dimension
@@ -191,23 +199,23 @@ void Frontend::DrawMenu() {
             homology_dim = dimension - 1;
             z_basis = {};
             b_basis = {};
+            h_basis = {};
 
             // first calculate B then Z
             homology_state = HomologyComputeState::B;
             start = std::chrono::steady_clock::now();
-            switch (homology_dim) {
-                case 0: bz_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindBZn<0>, &compute, epsilon); break;
-                case 1: bz_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindBZn<1>, &compute, epsilon); break;
-                default: break;
-            }
+            detail::static_for<int, 0, MAX_HOMOLOGY_DIM>([&](auto i) {
+                if (homology_dim == i) {
+                    bz_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindBZn<i>, &compute, epsilon);
+                }
+            });
         }
 
         ImGui::SameLine();
         ImGui::Text("dim(H%d) = %lld", homology_dim, h_basis.size());
         if (h_basis.size()) {
             ImGui::SameLine();
-            if (ImGui::Button("show homology")) {
-                show_homology ^= true;
+            if (ImGui::Checkbox("show homology", &show_homology)) {
                 if (show_homology) {
                     std::vector<i32> draw_indices{};
                     for (const auto& c : h_basis) {
@@ -232,7 +240,7 @@ void Frontend::DrawMenu() {
     if (disabled) ImGui::EndDisabled();
 
     if (!simplex_indices_future.valid() && !bz_basis_future.valid()) {
-        ImGui::Text("%llu %d-simplices", no_vertices[dimension] / (1 + dimension), dimension);
+        ImGui::Text("%d %d-simplices", compute.current_simplices, dimension);
         ImGui::Text("%lldms elapsed", std::chrono::duration_cast<std::chrono::milliseconds>(duration).count());
     }
     else {
@@ -292,11 +300,11 @@ void Frontend::CheckHomologyBasisCommand() {
         homology_state = HomologyComputeState::Z;
         b_basis = std::move(b);
 
-        switch (homology_dim) {
-            case 0: bz_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindBZn<-1>, &compute, epsilon); break;
-            case 1: bz_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindBZn<0>, &compute, epsilon); break;
-            default: break;
-        }
+        detail::static_for<int, 0, MAX_HOMOLOGY_DIM>([&](auto i) {
+            if (homology_dim == i) {
+                bz_basis_future = std::async(std::launch::async, &Compute<MAX_POINTS>::FindBZn<i - 1>, &compute, epsilon);
+            }
+        });
     }
 }
 
