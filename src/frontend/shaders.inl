@@ -34,9 +34,11 @@ const char* fragment_shader_source = R"(
 
     in vec3 color;
 
+    uniform float alpha = 0.5;
+
     void main()
     {
-        FragColor = vec4(color, 0.1);
+        FragColor = vec4(color, alpha);
     }
 )";
 

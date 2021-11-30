@@ -32,6 +32,7 @@ private:
     void* window;
     void* gl_context;
     u32 program;
+    u32 alpha;
     u32 view;
     u32 proj;
     u32 vao;

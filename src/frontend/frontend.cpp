@@ -67,6 +67,7 @@ void Frontend::InitOGL() {
     glUseProgram(program);
     view = glGetUniformLocation(program, "view");
     proj = glGetUniformLocation(program, "projection");
+    alpha = glGetUniformLocation(program, "alpha");
     glUseProgram(0);
 
     glGenVertexArrays(1, &vao);
@@ -88,6 +89,7 @@ void Frontend::InitOGL() {
     glEnable(GL_PROGRAM_POINT_SIZE);
     glEnable(GL_POINT_SMOOTH);
     glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_DEPTH_TEST);
 
     glBindVertexArray(0);
@@ -304,7 +306,7 @@ void Frontend::Run() {
         // Rendering
         ImGui::Render();
 
-        glClearColor(0, 0, 0, 1.0f);
+        glClearColor(0, 0, 0, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glViewport(0, 0, Width, Height);
 
@@ -323,14 +325,28 @@ void Frontend::Run() {
         if (!show_homology || homology_dim > 2) {
             for (int i = 0; i < no_vertices.size(); i++) {
                 if (no_vertices[i]) {
+                    glUniform1f(alpha, 1.0);
                     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[i]);
                     glDrawElements(draw_type[i], no_vertices[i], GL_UNSIGNED_INT, nullptr);
                 }
             }
         }
         else {
+            glUniform1f(alpha, 1.0);
             glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, hebo);
             glDrawElements(draw_type[homology_dim], h_basis_vertices, GL_UNSIGNED_INT, nullptr);
+
+            if (homology_dim < 2) {
+                static constexpr float alpha_values[] = { 0.3, 0.1 };
+
+                // also show higher dimensional simplices with lower alpha value
+                if (no_vertices[homology_dim + 1]) {
+                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[homology_dim + 1]);
+                    glUniform1f(alpha, alpha_values[homology_dim]);
+                    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[homology_dim + 1]);
+                    glDrawElements(draw_type[homology_dim + 1], no_vertices[homology_dim + 1], GL_UNSIGNED_INT, nullptr);
+                }
+            }
         }
 
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
