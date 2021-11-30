@@ -5,6 +5,8 @@
 
 template<typename T, size_t n>
 struct Point {
+    static constexpr auto dim = n;
+
     template<typename... Args>
     Point(Args... args) : data{args...} {
 
@@ -23,3 +25,4 @@ private:
 };
 
 using point3d = Point<float, 3>;
+using point_max = Point<float, 8>;

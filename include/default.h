@@ -11,4 +11,7 @@ using i16 = std::int16_t;
 using i32 = std::int32_t;
 using i64 = std::int64_t;
 
+#define MIN_POINTS 512
 #define MAX_POINTS 512
+#define NUM_SHIFTS_P1 1
+#define MAX_HOMOLOGY_DIM_P1 3

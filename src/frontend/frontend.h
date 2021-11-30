@@ -7,6 +7,7 @@
 #include <future>
 #include <optional>
 #include <chrono>
+#include <boost/container/static_vector.hpp>
 
 
 struct Frontend {
@@ -35,7 +36,7 @@ private:
     u32 proj;
     u32 vao;
     u32 vbo;
-    u32 ebo;
+    std::array<u32, 3> ebo;
 
     void InitSDL();
     void InitOGL();
@@ -43,20 +44,20 @@ private:
     void HandleInput();
 
     bool menu_open = true;
+    int projection = 0;
+
     int dimension = 0;
     float epsilon = 0.1;
     void DrawMenu();
 
-    u32 draw_type;
-    u32 next_draw_type;
-    std::vector<i32> (Compute<MAX_POINTS>::*command)(float);
-    size_t no_vertices;
+    std::array<size_t, 3> no_vertices;
     std::chrono::time_point<std::chrono::steady_clock> start;
     std::chrono::duration<double> duration = std::chrono::milliseconds(0);
-    std::future<std::vector<i32>> simplex_indices_future{};
+    std::future<boost::container::static_vector<std::vector<i32>, 3>> simplex_indices_future{};
     void CheckSimplexIndexCommand();
 
 
+    using point_t = typename Compute<MAX_POINTS>::point_t;
     using simplex_t = typename Compute<MAX_POINTS>::simplex_t;
     using column_t = typename Compute<MAX_POINTS>::column_t;
     using basis_t = typename Compute<MAX_POINTS>::basis_t;

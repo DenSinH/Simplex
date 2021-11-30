@@ -10,7 +10,7 @@
 struct Reader {
     Reader(const std::string& filename, std::string separator = ",");
 
-    std::vector<point3d> Read();
+    std::vector<point_max> Read();
 
 private:
     std::ifstream file;

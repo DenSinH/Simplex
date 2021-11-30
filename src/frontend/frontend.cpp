@@ -13,9 +13,7 @@ constexpr float pi = 3.14159265;
 
 Frontend::Frontend(Compute<MAX_POINTS>&& _compute) :
         compute(std::move(_compute)),
-        draw_type{GL_POINTS},
         no_vertices{compute.points.size()},
-        command{&Compute<MAX_POINTS>::FindSimplexDrawIndices<0>},
         homology_dim{0} {
 
 }
@@ -71,17 +69,17 @@ void Frontend::InitOGL() {
 
     glGenVertexArrays(1, &vao);
     glGenBuffers(1, &vbo);
-    glGenBuffers(1, &ebo);
+    glGenBuffers(3, ebo.data());
 
     glBindVertexArray(vao);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(point3d) * compute.points.size(), compute.points.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(point_t) * compute.points.size(), compute.points.data(), GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(point_t), nullptr);
     glEnableVertexAttribArray(0);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-    std::vector<i32> indices = compute.FindSimplexDrawIndices<0>(0);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[0]);
+    std::vector<i32> indices = compute.FindSimplexDrawIndices(0, 0)[0];
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * indices.size(), indices.data(), GL_STATIC_DRAW);
 
     glEnable(GL_PROGRAM_POINT_SIZE);
@@ -158,7 +156,7 @@ void Frontend::HandleInput() {
 }
 
 void Frontend::DrawMenu() {
-    ImGui::SetNextWindowSize(ImVec2{400, 155}, ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2{400, 200}, ImGuiCond_Always);
     if (!ImGui::Begin("Menu", &menu_open, ImGuiWindowFlags_NoResize)) {
         ImGui::End();
         return;
@@ -167,28 +165,19 @@ void Frontend::DrawMenu() {
     bool disabled = simplex_indices_future.valid() || bz_basis_future.valid();
 
     if (disabled) ImGui::BeginDisabled();
-    const char* items[] = {"0-dimensional", "1-dimensional", "2-dimensional"};
-    if (ImGui::Combo("dimension", &dimension, items, IM_ARRAYSIZE(items))) {
-        if (dimension == 0) {
-            next_draw_type = GL_POINTS;
-            command = &Compute<MAX_POINTS>::FindSimplexDrawIndices<0>;
-        }
-        else if (dimension == 1) {
-            next_draw_type = GL_LINES;
-            command = &Compute<MAX_POINTS>::FindSimplexDrawIndices<1>;
-        }
-        else {
-            next_draw_type = GL_TRIANGLES;
-            command = &Compute<MAX_POINTS>::FindSimplexDrawIndices<2>;
-        }
+    const char* dimension_items[] = {"0-dimensional", "1-dimensional", "2-dimensional"};
+    if (ImGui::Combo("dimension", &dimension, dimension_items, IM_ARRAYSIZE(dimension_items))) {
         start = std::chrono::steady_clock::now();
-        simplex_indices_future = std::async(std::launch::async, command, &compute, epsilon);
+        simplex_indices_future = std::async(
+                std::launch::async, &Compute<MAX_POINTS>::FindSimplexDrawIndices, &compute, epsilon, dimension
+        );
     }
     if (ImGui::SliderFloat("epsilon", &epsilon, 0, 5, "%.4f", ImGuiSliderFlags_Logarithmic)) {
         // draw type doesn't change
-        next_draw_type = draw_type;
         start = std::chrono::steady_clock::now();
-        simplex_indices_future = std::async(std::launch::async, command, &compute, epsilon);
+        simplex_indices_future = std::async(
+                std::launch::async, &Compute<MAX_POINTS>::FindSimplexDrawIndices, &compute, epsilon, dimension
+        );
     }
     if (dimension > 0) {
         if (ImGui::Button(("homology H" + std::to_string(dimension - 1)).c_str())) {
@@ -212,12 +201,21 @@ void Frontend::DrawMenu() {
     if (disabled) ImGui::EndDisabled();
 
     if (!simplex_indices_future.valid() && !bz_basis_future.valid()) {
-        ImGui::Text("%llu simplices", no_vertices / (1 + dimension));
+        ImGui::Text("%llu %d-simplices", no_vertices[dimension] / (1 + dimension), dimension);
         ImGui::Text("%lldms elapsed", std::chrono::duration_cast<std::chrono::milliseconds>(duration).count());
     }
     else {
         ImGui::Text("%d simplices", compute.current_simplices);
         ImGui::Text("%lldms elapsed", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count());
+    }
+
+    // allow different coordinate projections
+    const char* coord_projection_items[] = {
+            "0", "1", "2", "3", "4", "5", "6"
+    };
+    if (ImGui::Combo("projection", &projection, coord_projection_items, IM_ARRAYSIZE(coord_projection_items))) {
+        glBindVertexArray(vao);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(point_t), (void*)(projection * sizeof(float)));
     }
 
     ImGui::End();
@@ -233,10 +231,14 @@ void Frontend::CheckSimplexIndexCommand() {
 
     auto indices = simplex_indices_future.get();
     duration = std::chrono::steady_clock::now() - start;
-    no_vertices = indices.size() ;
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * indices.size(), indices.data(), GL_STATIC_DRAW);
-    draw_type = next_draw_type;
+
+    // clear out number of vertices
+    no_vertices = {};
+    for (int i = 0; i < indices.size(); i++) {
+        no_vertices[i] = indices[i].size();
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[i]);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * no_vertices[i], indices[i].data(), GL_STATIC_DRAW);
+    }
 }
 
 
@@ -313,9 +315,18 @@ void Frontend::Run() {
 
         glBindVertexArray(vao);
 
-        glDrawArrays(GL_POINTS, 0, compute.points.size());
-        glDrawElements(draw_type, no_vertices, GL_UNSIGNED_INT, nullptr);
+        static constexpr u32 draw_type[] = {
+                GL_POINTS, GL_LINES, GL_TRIANGLES
+        };
+        for (int i = 0; i < no_vertices.size(); i++) {
+            if (no_vertices[i]) {
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo[i]);
+                glDrawArrays(GL_POINTS, 0, compute.points.size());
+                glDrawElements(draw_type[i], no_vertices[i], GL_UNSIGNED_INT, nullptr);
+            }
+        }
 
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
         glUseProgram(0);
 

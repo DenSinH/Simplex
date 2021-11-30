@@ -12,31 +12,31 @@ Reader::Reader(const std::string& filename, std::string separator) : separator(s
     }
 }
 
-std::vector<point3d> Reader::Read() {
-    std::vector<point3d> data;
+std::vector<point_max> Reader::Read() {
+    std::vector<point_max> data;
     std::string line;
     const auto seplen = separator.length();
     std::vector<char> sep(seplen);
     sep.resize(seplen);
 
-    auto expect_sep = [&](std::stringstream& ss) {
-        ss.read(sep.data(), seplen);
-        sep.push_back(0);
-        if (separator != sep.data()) {
-            throw std::runtime_error("Bad separator");
-        }
-    };
-
     while (std::getline(file, line)) {
         std::stringstream ss(line);
-        float x, y, z;
-        ss >> x;
-        expect_sep(ss);
-        ss >> y;
-        expect_sep(ss);
-        ss >> z;
+        point_max point{};
+        int c = 0;
+        while (ss && (c < point_max::dim)) {
+            float x;
+            ss >> x;
+            if (ss) {
+                ss.read(sep.data(), seplen);
+                sep.push_back(0);
+                if (separator != sep.data()) {
+                    throw std::runtime_error("Bad separator");
+                }
+            }
+            point[c++] = x;
+        }
 
-        data.emplace_back(x, y, z);
+        data.push_back(point);
     }
     return std::move(data);
 }
