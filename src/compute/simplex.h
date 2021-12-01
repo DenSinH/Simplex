@@ -85,7 +85,18 @@ struct Simplex {
     bool operator<(const Simplex<N>& other) const {
         // lexographic ordering
         int i = 0, j = 0;
-        u64 si, sj;
+
+        // it's very very likely that the difference will be made by the first point
+        // that's why we separate the first check
+        // I couldn't get the compiler to generate better code without duplicating this bit sadly
+        u64 si = points[0], sj = other.points[0];
+        if (std::countr_zero(si) < std::countr_zero(sj)) {
+            return true;
+        }
+        else if (std::countr_zero(si) > std::countr_zero(sj)) {
+            return false;
+        }
+
         BOOST_FOREACH(boost::tie(si, sj), boost::combine(points, other.points)) {
             while (si && sj) {
                 if (std::countr_zero(si) < std::countr_zero(sj)) {

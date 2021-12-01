@@ -24,7 +24,10 @@ std::vector<i32> Compute<N>::FindSimplexDrawIndicesImpl([[maybe_unused]] float e
     ForEachSimplex<n>(epsilon, [&](simplex_t s) {
         this->ComputeBase::current_simplices++;
         s.ForEachPoint([&](int p) {
-            indices.push_back(p);
+            if constexpr(n < 3) {
+                // we can't draw higher dimensional simplices anyway
+                indices.push_back(p);
+            }
         });
     });
     return std::move(indices);
@@ -33,12 +36,21 @@ std::vector<i32> Compute<N>::FindSimplexDrawIndicesImpl([[maybe_unused]] float e
 template<size_t N>
 boost::container::static_vector<std::vector<i32>, 3> Compute<N>::FindSimplexDrawIndices(float epsilon, int n) {
     boost::container::static_vector<std::vector<i32>, 3> result{};
+
     result.push_back(FindSimplexDrawIndicesImpl<0>(epsilon));
     if (n >= 1) {
         result.push_back(FindSimplexDrawIndicesImpl<1>(epsilon));
-        if (n >= 2) {
-            result.push_back(FindSimplexDrawIndicesImpl<2>(epsilon));
-        }
+    }
+    if (n >= 2) {
+        result.push_back(FindSimplexDrawIndicesImpl<2>(epsilon));
+    }
+    if (n >= 3) {
+        detail::static_for<size_t, 0, MAX_HOMOLOGY_DIM_P1>([&](auto i) {
+            if (i == n) {
+                // just to see how long it actually takes to compute
+                FindSimplexDrawIndicesImpl<i>(epsilon);
+            }
+        });
     }
     return result;
 }

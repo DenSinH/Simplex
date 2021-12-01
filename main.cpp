@@ -7,7 +7,7 @@
 int main(int argc, char** argv) {
     auto reader = std::make_unique<Reader>(argv[1]);
     auto points = reader->Read();
-    std::unique_ptr<ComputeBase> compute = std::make_unique<Compute<MAX_POINTS>>(points);
+    auto compute = std::make_unique<Compute<MAX_POINTS>>(points);
 
     auto frontend = std::make_unique<Frontend>(std::move(compute));
 
@@ -29,7 +29,7 @@ int main(int argc, char** argv) {
 //    std::printf("%llu basis vectors\n", result.first);
 
     // for AMD uProf
-//    compute->FindSimplexDrawIndices<dim>(0.6);
-
+//    auto [dim, _] = compute->FindHBasisDrawIndices(1.6, 2);
+//    std::printf("%lld\n", dim);
     return 0;
 }
