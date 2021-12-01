@@ -28,8 +28,16 @@ if __name__ == '__main__':
     import math
     # circles = lambda x, y: (0.5 * math.cos(x), 0.5 * math.sin(x), 0) if y < 0.5 else (1 + 0.5 * math.cos(x), 0.5 * math.sin(x), 0)
     # circle = lambda x: (math.cos(x), math.sin(x), 0)
-    sphere = lambda phi, theta: (math.cos(phi) * math.sin(theta), math.sin(phi) * math.sin(theta), math.cos(theta))
+    # use generate_regular for these:
+    # sphere = lambda phi, theta: (math.cos(phi) * math.sin(theta), math.sin(phi) * math.sin(theta), math.cos(theta))
+    r = 0.3
+    R = 1
+    torus = lambda phi, theta: (
+        (r * math.cos(theta) + R) * math.cos(phi),
+        (r * math.cos(theta) + R) * math.sin(phi),
+        r * math.sin(theta)
+    )
 
     with open("points.csv", "w+") as f:
-        for p in generate_regular(sphere, 25, [2 * 3.1416, 3.1416], stddev=0.02):
+        for p in generate_regular(torus, 40, [2 * 3.1416, 2 * 3.1416], stddev=0.02):
             f.write(",".join(str(coord) for coord in p) + "\n")

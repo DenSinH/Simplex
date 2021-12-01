@@ -204,7 +204,6 @@ void Frontend::DrawMenu() {
             h_basis_size = 0;
             h_basis_vertices = 0;
 
-            // first calculate B then Z
             start = std::chrono::steady_clock::now();
             h_basis_future = std::async(std::launch::async, &ComputeBase::FindHBasisDrawIndices, compute.get(), epsilon, homology_dim);
         }
@@ -271,8 +270,11 @@ void Frontend::CheckHomologyBasisCommand() {
     }
 
     auto [h_basis_size_, h_basis] = h_basis_future.get();
+    duration = std::chrono::steady_clock::now() - start;
+
     h_basis_size = h_basis_size_;
     h_basis_vertices = h_basis.size();
+
     glBindVertexArray(vao);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, hebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(i32) * h_basis_vertices, h_basis.data(), GL_STATIC_DRAW);

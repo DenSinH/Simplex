@@ -1,14 +1,15 @@
 #pragma once
 
 #include "simplex.h"
-#include <boost/container/set.hpp>
+#include <boost/container/flat_set.hpp>
 
 
 template<size_t N>
 struct Column {
     using simplex_t = Simplex<N>;
+    using vector_t = boost::container::flat_set<simplex_t>;
 
-    boost::container::set<simplex_t> data;
+    vector_t data;
 
     Column<N>() = default;
 
@@ -26,7 +27,7 @@ struct Column {
     }
 
     bool Contains(const simplex_t& s) {
-        return data.find(s) != data.end();
+        return data.contains(s);
     }
 
     operator bool() const {
@@ -34,12 +35,17 @@ struct Column {
     }
 
     Column<N>& operator^=(const Column<N>& other) {
+        // in-place, using ordering of the set
+        typename vector_t::const_iterator it = data.begin();
         for (const auto s : other.data) {
-            if (Contains(s)) [[unlikely]] {
-                data.erase(s);
+            while (it != data.end() && (*it < s)) {
+                it++;
+            }
+            if (it == data.end() || (s < *it)) [[likely]] {
+                it = data.emplace_hint(it, s);
             }
             else {
-                data.insert(s);
+                it = data.erase(it);
             }
         }
         return *this;

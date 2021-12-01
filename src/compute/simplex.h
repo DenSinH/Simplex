@@ -61,7 +61,7 @@ struct func<R (C::*)(Args...) const> {
 template<typename Callable>
 struct func {
     using args_t = typename func<decltype(&Callable::operator())>::args_t;
-    using return_t = typename func<decltype(&Callable::operator())>::return_t;;
+    using return_t = typename func<decltype(&Callable::operator())>::return_t;
 };
 
 }
