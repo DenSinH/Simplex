@@ -48,18 +48,39 @@ struct Compute final : ComputeBase {
 
     template<size_t n, class F>
     void ForEachSimplex(float epsilon, const F& func);
+
+    // find simplex draw indices for frontend given for all dimensions lower than the given dimension
+    // and lower then 3 (we cannot draw 3-dimensional solids anyway
     boost::container::static_vector<std::vector<i32>, 3> FindSimplexDrawIndices(float epsilon, int n) final;
-    template<int n>
-    std::pair<basis_t, basis_t> FindBZn(float epsilon);
-    basis_t FindHBasis(const basis_t& B, const basis_t& Z) const;
+
+    // find simplex draw indices for the basis of the homology group of the given dimension
     std::pair<size_t, std::vector<i32>> FindHBasisDrawIndices(float epsilon, int n) final;
+
+    // reduce a basis for Z to a basis of H given a basis for B
+    basis_t FindHBasis(const basis_t& B, const basis_t& Z) const;
+
+    // find a vector of H bases for all dimensions lower or equal to the given dimension
+    std::vector<basis_t> FindHBases(float epsilon, int n);
+
+    // find a barcode given a range of epsilons
+    std::array<std::vector<std::vector<float>>, MAX_BARCODE_HOMOLOGY + 1> FindBarcode(float lower_bound, float upper_bound, float de);
 
 private:
     template<size_t n>
     std::vector<i32> FindSimplexDrawIndicesImpl(float epsilon);
+
+    // find the basis for B{0} and Z{1}
+    // this is a special (optimized) method for the one below
     std::pair<basis_t, basis_t> FindBZ0(float epsilon);
+
+    // find the basis for B{n} and Z{n + 1}
+    template<int n>
+    std::pair<basis_t, basis_t> FindBZn(float epsilon);
+
+    // find all 1-simplices
     void Find1Simplices(float epsilon);
 
+    // find the distance between 2 points given their indices
     float Distance2(int i, int j) const {
         float dist = 0;
         for (int c = 0; c < point_t::dim; c++) {

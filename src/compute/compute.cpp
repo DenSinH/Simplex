@@ -1,8 +1,10 @@
 #include "compute.h"
 
-#include <boost/preprocessor/repetition/repeat.hpp>
-
 #include "static_for.h"
+
+#include <thread>
+#include <future>
+#include <boost/preprocessor/repetition/repeat.hpp>
 
 
 template<size_t N>
@@ -253,6 +255,108 @@ std::pair<size_t, std::vector<i32>> Compute<N>::FindHBasisDrawIndices(float epsi
     return std::make_pair(h_basis.size(), std::move(result));
 }
 
+template<size_t N>
+std::vector<typename Compute<N>::basis_t> Compute<N>::FindHBases(float epsilon, int n) {
+    std::vector<basis_t> result{};
+    basis_t z_basis = FindBZn<-1>(epsilon).second;
+
+    detail::static_for<int, 0, MAX_HOMOLOGY_DIM>([&](auto i) {
+        if (i <= n) {
+            // compute the basis for B and use the previous basis for Z to compute the next basis for H
+            auto [b_basis, z_] = FindBZn<i>(epsilon);
+            result.push_back(FindHBasis(b_basis, z_basis));
+            // keep next basis for Z
+            z_basis = std::move(z_);
+        }
+    });
+
+    return result;
+}
+
+template<size_t N>
+std::array<std::vector<std::vector<float>>, MAX_BARCODE_HOMOLOGY + 1> Compute<N>::FindBarcode(float lower_bound, float upper_bound, float de) {
+    const auto num_workers = std::thread::hardware_concurrency();
+
+    // create worker Compute instances
+    std::vector<std::unique_ptr<Compute<N>>> workers{};
+    workers.reserve(num_workers);
+    for (int i = 0; i < num_workers; i++) {
+        workers.push_back(std::make_unique<Compute<N>>(points));
+    }
+
+    // futures and labeled results
+    // when we return we do not care what the low value was anymore, but for collecting the results we do
+    std::vector<std::pair<float, std::future<std::vector<basis_t>>>> futures;
+    futures.resize(num_workers);
+    std::array<boost::unordered_map<simplex_t, std::vector<float>>, MAX_BARCODE_HOMOLOGY + 1> labeled_results{};
+
+    // keep track of epsilon per basis vector low simplex
+    auto parse_results = [&](float eps, std::vector<basis_t>& bases) {
+        for (int dim = 0; dim < bases.size(); dim++) {
+            std::printf("Got basis for H%d at eps = %f of size %llu\n", dim, eps, bases[dim].size());
+            for (auto& c : bases[dim]) {
+                const auto low = c.FindLow();
+
+                if (labeled_results[dim].find(low) == labeled_results[dim].end()) {
+                    labeled_results[dim][low] = {};
+                }
+                labeled_results[dim].at(low).push_back(eps);
+            }
+        }
+    };
+
+    float epsilon = lower_bound;
+    while (epsilon < upper_bound) {
+        int i;
+        for (i = 0; i < num_workers; i++) {
+            if (futures[i].second.valid()) {
+                // get results
+                if (futures[i].second.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
+                    auto& [eps, fut] = futures[i];
+                    auto bases = fut.get();
+                    parse_results(eps, bases);
+                }
+            }
+
+            // spawn worker for new epsilon
+            if (!futures[i].second.valid()) {
+                std::printf("Launching for %f\n", epsilon);
+                futures[i] = std::make_pair(epsilon, std::async(
+                        std::launch::async, &Compute<N>::FindHBases, workers[i].get(), epsilon, MAX_BARCODE_HOMOLOGY
+                ));
+                break;
+            }
+        }
+
+        // no available worker found
+        if (i == num_workers) {
+            // wait for worker (choice is rather arbitrary)
+            futures[0].second.wait();
+        }
+        else {
+            epsilon += de;
+        }
+    }
+
+    // get leftover results
+    for (auto& [eps, fut] : futures) {
+        if (fut.valid()) {
+            fut.wait();
+            auto bases = fut.get();
+            parse_results(eps, bases);
+        }
+    }
+
+    // convert labeled_results into unlabeled results
+    std::array<std::vector<std::vector<float>>, MAX_BARCODE_HOMOLOGY + 1> results{};
+    for (int dim = 0; dim < labeled_results.size(); dim++) {
+        for (auto&& [k, v] : labeled_results[dim]) {
+            results[dim].push_back(v);
+        }
+    }
+
+    return results;
+}
 
 #define INSTANTIATE_COMPUTE_METHODS(_, m, n) \
     template std::pair<typename Compute<MIN_POINTS << (n)>::basis_t, typename Compute<MIN_POINTS << (n)>::basis_t> Compute<MIN_POINTS << (n)>::FindBZn<(m) - 1>(float epsilon);
