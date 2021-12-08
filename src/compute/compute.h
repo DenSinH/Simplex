@@ -6,6 +6,7 @@
 #include "default.h"
 
 #include <vector>
+#include <boost/container/flat_set.hpp>
 #include <boost/unordered_set.hpp>
 #include <boost/unordered_map.hpp>
 #include <boost/container/static_vector.hpp>
@@ -28,11 +29,18 @@ struct ComputeBase {
 };
 
 
+
 template<size_t N>
 struct Compute final : ComputeBase {
     using simplex_t = Simplex<N>;
     using column_t = Column<N>;
     using basis_t = std::vector<column_t>;
+
+    struct SimplexCache {
+        float max_epsilon = {};
+        boost::container::flat_set<std::pair<float, simplex_t>> ordered{};
+        boost::unordered_set<simplex_t> unordered{};
+    };
 
     Compute(const std::vector<point_t>& points) : ComputeBase(points) {
 
@@ -40,11 +48,8 @@ struct Compute final : ComputeBase {
 
     ~Compute() final = default;
 
-    float last_epsilon = -1;
-    std::array<std::array<bool, N>, N> one_simplex_cache{};
-    std::vector<boost::unordered_set<simplex_t>> simplex_cache{};
+    std::vector<SimplexCache> cache{};
 
-    void ClearSimplexCache(float epsilon);
 
     template<size_t n, class F>
     void ForEachSimplex(float epsilon, const F& func);
@@ -77,8 +82,8 @@ private:
     template<int n>
     std::pair<basis_t, basis_t> FindBZn(float epsilon);
 
-    // find all 1-simplices
-    void Find1Simplices(float epsilon);
+    template<size_t n>
+    void FindnSimplices(float epsilon);
 
     // find the distance between 2 points given their indices
     float Distance2(int i, int j) const {
@@ -91,43 +96,49 @@ private:
     }
 };
 
-
 template<size_t N>
-template<size_t n, class F>
-void Compute<N>::ForEachSimplex(float epsilon, const F& func) {
-    // 0 simplices are always just the points
+template<size_t n>
+void Compute<N>::FindnSimplices(float epsilon) {
     if constexpr(n == 0) {
-        for (int i = 0; i < points.size(); i++) {
-            func(simplex_t{i});
-        }
         return;
     }
 
-    // clear cache if needed
-    ClearSimplexCache(epsilon);
-
-    if (simplex_cache.size() < n) {
-        simplex_cache.resize(n);
+    if (cache.size() < n) {
+        cache.resize(n);
     }
+
+    if (epsilon <= cache[n - 1].max_epsilon) {
+        return;
+    }
+    const float prev_epsilon = cache[n - 1].max_epsilon;
+    cache[n - 1].max_epsilon = epsilon;
 
     // 1 simplices are special since we can use them for the higher order simplices
     if constexpr(n == 1) {
-        Find1Simplices(epsilon);
-    }
+        auto& ordered_simplices = cache[0].ordered;
+        auto& unordered_simplices = cache[0].unordered;
 
-    // use cached simplices
-    if (!simplex_cache[n - 1].empty()) {
-        for (simplex_t s : simplex_cache[n - 1]) {
-            func(s);
+        for (int i = 0; i < points.size(); i++) {
+            for (int j = i + 1; j < points.size(); j++) {
+                const float dist2 = Distance2(i, j);
+                if (dist2 <= 4 * epsilon * epsilon) {
+                    if (unordered_simplices.find(simplex_t{i, j}) == unordered_simplices.end()) {
+                        ordered_simplices.emplace(dist2, simplex_t{i, j});
+                        unordered_simplices.insert(simplex_t{i, j});
+                    }
+                }
+            }
         }
-        return;
     }
+    else {
+        auto& unordered_simplices = cache[n - 1].unordered;
+        auto& ordered_simplices = cache[n - 1].ordered;
 
-    if constexpr(n > 1) {
-        auto& simplices = simplex_cache[n - 1] = {};
-        // first find all 1-simplices
-        Find1Simplices(epsilon);
-        ForEachSimplex<n - 1>(epsilon, [&](simplex_t s) {
+        FindnSimplices<n - 1>(epsilon);
+
+        const float prev_max_dist = 4 * prev_epsilon * prev_epsilon;
+        for (auto it = cache[n - 2].ordered.lower_bound(std::make_pair(prev_max_dist, simplex_t{})); it != cache[n - 2].ordered.end(); it++) {
+            const auto [max_dist, s] = *it;
             // try every other point
             for (int i = 0; i < points.size(); i++) {
                 if (s[i]) [[unlikely]] {
@@ -135,22 +146,43 @@ void Compute<N>::ForEachSimplex(float epsilon, const F& func) {
                     continue;
                 }
                 auto next = s | simplex_t{i};
-                if (simplices.find(next) != simplices.end()) {
+                if (unordered_simplices.find(next) != unordered_simplices.end()) {
                     // simplex is already found
                     continue;
                 }
 
+                float dist = max_dist;
                 if (!s.ForEachPoint([&](int p) -> bool {
                     // check whether there is a 1-simplex for every point in the simplex
-                    if (!one_simplex_cache[i][p]) {
+                    dist = std::max(dist, Distance2(i, p));
+                    if (dist > 4 * epsilon * epsilon) {
                         return true;  // bad simplex, 1-simplex does not exist
                     }
                     return false;  // keep going, 1-simplex exists for this point
                 })) {
-                    simplices.insert(next);
-                    func(next);
+                    ordered_simplices.emplace_hint(ordered_simplices.end(), dist, next);
+                    unordered_simplices.insert(next);
                 }
             }
-        });
+        }
+    }
+}
+
+template<size_t N>
+template<size_t n, class F>
+void Compute<N>::ForEachSimplex(float epsilon, const F& func) {
+    // 0 simplices are always just the points
+    if constexpr(n == 0) {
+        for (int i = 0; i < points.size(); i++) {
+            func(0, simplex_t{i});
+        }
+    }
+    else {
+        FindnSimplices<n>(epsilon);
+        for (auto& [dist, s] : cache[n - 1].ordered) {
+            if (dist <= 4 * epsilon * epsilon) {
+                func(dist, s);
+            }
+        }
     }
 }

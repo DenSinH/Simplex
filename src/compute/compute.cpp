@@ -8,22 +8,13 @@
 
 
 template<size_t N>
-void Compute<N>::ClearSimplexCache(float epsilon) {
-    if (epsilon != last_epsilon) {
-        simplex_cache = {};
-        one_simplex_cache = {};
-    }
-    last_epsilon = epsilon;
-}
-
-template<size_t N>
 template<size_t n>
 std::vector<i32> Compute<N>::FindSimplexDrawIndicesImpl([[maybe_unused]] float epsilon) {
     std::vector<i32> indices = {};
     indices.reserve(n * points.size());
     this->ComputeBase::current_simplices = 0;
 
-    ForEachSimplex<n>(epsilon, [&](simplex_t s) {
+    ForEachSimplex<n>(epsilon, [&](float, simplex_t s) {
         this->ComputeBase::current_simplices++;
         s.ForEachPoint([&](int p) {
             if constexpr(n < 3) {
@@ -59,28 +50,6 @@ boost::container::static_vector<std::vector<i32>, 3> Compute<N>::FindSimplexDraw
 
 
 template<size_t N>
-void Compute<N>::Find1Simplices(float epsilon) {
-    // clear cache if needed
-    ClearSimplexCache(epsilon);
-
-    auto& simplices = simplex_cache[0];
-
-    if (!simplices.empty()) {
-        return;
-    }
-
-    for (int i = 0; i < points.size(); i++) {
-        for (int j = i + 1; j < points.size(); j++) {
-            if (Distance2(i, j) <= 4 * epsilon * epsilon) {
-                simplices.insert(simplex_t{i, j});
-                one_simplex_cache[i][j] = true;
-                one_simplex_cache[j][i] = true;
-            }
-        }
-    }
-}
-
-template<size_t N>
 std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>::FindBZ0(float epsilon) {
     // low -> column
     // at most N points
@@ -97,7 +66,7 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
     basis_t b_basis{};
     basis_t z_basis{};
 
-    ForEachSimplex<1>(epsilon, [&](const simplex_t s) {
+    ForEachSimplex<1>(epsilon, [&](float, const simplex_t s) {
         auto b_col = s;
         auto z_col = column_t{s};
         int low;
@@ -168,7 +137,7 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
         basis_t b_basis{};
         basis_t z_basis{};
 
-        ForEachSimplex<n + 1>(epsilon, [&](simplex_t s) {
+        ForEachSimplex<n + 1>(epsilon, [&](float dist, simplex_t s) {
             auto b_col = column_t::BoundaryOf(s);
             auto z_col = column_t{s};
             simplex_t low;
@@ -275,7 +244,7 @@ std::vector<typename Compute<N>::basis_t> Compute<N>::FindHBases(float epsilon, 
 
 template<size_t N>
 std::array<std::vector<std::vector<float>>, MAX_BARCODE_HOMOLOGY + 1> Compute<N>::FindBarcode(float lower_bound, float upper_bound, float de) {
-    const auto num_workers = std::thread::hardware_concurrency();
+    const auto num_workers = std::thread::hardware_concurrency() / 2;
 
     // create worker Compute instances
     std::vector<std::unique_ptr<Compute<N>>> workers{};
@@ -305,8 +274,9 @@ std::array<std::vector<std::vector<float>>, MAX_BARCODE_HOMOLOGY + 1> Compute<N>
         }
     };
 
-    float epsilon = lower_bound;
-    while (epsilon < upper_bound) {
+    // with optimized caching this will be way faster
+    float epsilon = upper_bound;
+    while (epsilon > lower_bound) {
         int i;
         for (i = 0; i < num_workers; i++) {
             if (futures[i].second.valid()) {
@@ -334,7 +304,7 @@ std::array<std::vector<std::vector<float>>, MAX_BARCODE_HOMOLOGY + 1> Compute<N>
             futures[0].second.wait();
         }
         else {
-            epsilon += de;
+            epsilon -= de;
         }
     }
 
