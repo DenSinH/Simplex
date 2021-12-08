@@ -69,12 +69,13 @@ struct func {
 template<size_t N>
 struct Simplex {
     static constexpr size_t bits = sizeof(u64) * 8;
+    float max_dist;
     std::array<u64, (N + bits - 1) / bits> points;
 
     Simplex() = default;
 
     template<typename... Args>
-    Simplex(Args... ns) : points{} {
+    Simplex(Args... ns) : max_dist(0), points{} {
         ((points[ns / bits] |= 1ull << (ns % bits)), ...);
     }
 
@@ -86,17 +87,16 @@ struct Simplex {
         // lexographic ordering
         int i = 0, j = 0;
 
-        // it's very very likely that the difference will be made by the first point
-        // that's why we separate the first check
-        // I couldn't get the compiler to generate better code without duplicating this bit sadly
-        u64 si = points[0], sj = other.points[0];
-        if (std::countr_zero(si) < std::countr_zero(sj)) {
+        if (max_dist < other.max_dist) {
             return true;
         }
-        else if (std::countr_zero(si) > std::countr_zero(sj)) {
+        if (max_dist > other.max_dist) {
             return false;
         }
 
+        // if the maximum distance is the same, take the lowest point index to be lower
+        // this is very unlikely
+        u64 si, sj;
         BOOST_FOREACH(boost::tie(si, sj), boost::combine(points, other.points)) {
             while (si && sj) {
                 if (std::countr_zero(si) < std::countr_zero(sj)) {
@@ -169,40 +169,6 @@ struct Simplex {
             count += bits;
         }
         return -1;
-    }
-
-    std::pair<int, int> FindLow2() const {
-        // find lowest 2 set bits
-        std::pair<int, int> result;
-        int count = 0;
-        int i;
-        for (i = 0; i < points.size(); i++) {
-            auto section = points[i];
-            if (section) {
-                int bit = std::countr_zero(section);
-                result.first = count + bit;
-
-                // 2 bits in same section
-                if (section ^ (1ull << bit)) {
-                    result.second = count + std::countr_zero(section ^ (1ull << bit));
-                    return result;
-                }
-                break;
-            }
-            count += bits;
-        }
-
-        count += bits;
-        for (int j = i + 1; j < points.size(); j++) {
-            auto section = points[j];
-            if (section) {
-                result.second = count + std::countr_zero(section);
-                return result;
-            }
-            count += bits;
-        }
-
-        return result;
     }
 
     template<class F, typename T = typename detail::func<F>::return_t>

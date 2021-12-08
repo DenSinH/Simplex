@@ -17,15 +17,6 @@ struct Column {
         data.insert(s);
     }
 
-    static Column<N> BoundaryOf(simplex_t s) {
-        Column<N> result{};
-        s.ForEachPoint([&](int p) {
-            // insert all n - 1 simplices by iterating over every point and removing it
-            result.data.insert(s ^ simplex_t{p});
-        });
-        return result;
-    }
-
     bool Contains(const simplex_t& s) {
         return data.contains(s);
     }
@@ -58,6 +49,7 @@ struct Column {
 //    }
 
     simplex_t FindLow() const {
-        return *data.begin();
+        // low element is the element that was added last (highest max distance)
+        return *data.rbegin();
     }
 };

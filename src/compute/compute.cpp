@@ -14,7 +14,7 @@ std::vector<i32> Compute<N>::FindSimplexDrawIndicesImpl([[maybe_unused]] float e
     indices.reserve(n * points.size());
     this->ComputeBase::current_simplices = 0;
 
-    ForEachSimplex<n>(epsilon, [&](float, simplex_t s) {
+    ForEachSimplex<n>(epsilon, [&](simplex_t s) {
         this->ComputeBase::current_simplices++;
         s.ForEachPoint([&](int p) {
             if constexpr(n < 3) {
@@ -66,7 +66,7 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
     basis_t b_basis{};
     basis_t z_basis{};
 
-    ForEachSimplex<1>(epsilon, [&](float, const simplex_t s) {
+    ForEachSimplex<1>(epsilon, [&](const simplex_t s) {
         auto b_col = s;
         auto z_col = column_t{s};
         int low;
@@ -81,7 +81,7 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
             B[low] = std::make_pair(s, b_col);
 
             // this column will never be added to again and is non-zero
-            b_basis.push_back(column_t::BoundaryOf(s));
+            b_basis.push_back(BoundaryOf<1>(s));
 
             // this column has not been added to Z yet (low never found)
             Z.emplace(s, z_col);
@@ -137,8 +137,8 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
         basis_t b_basis{};
         basis_t z_basis{};
 
-        ForEachSimplex<n + 1>(epsilon, [&](float dist, simplex_t s) {
-            auto b_col = column_t::BoundaryOf(s);
+        ForEachSimplex<n + 1>(epsilon, [&](simplex_t s) {
+            auto b_col = BoundaryOf<n + 1>(s);
             auto z_col = column_t{s};
             simplex_t low;
             for (low = b_col.FindLow(); b_col && (B.find(low) != B.end()); low = b_col.FindLow()) {

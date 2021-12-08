@@ -38,7 +38,7 @@ struct Compute final : ComputeBase {
 
     struct SimplexCache {
         float max_epsilon = {};
-        boost::container::flat_set<std::pair<float, simplex_t>> ordered{};
+        boost::container::flat_set<simplex_t> ordered{};
         boost::unordered_set<simplex_t> unordered{};
     };
 
@@ -94,6 +94,24 @@ private:
         }
         return dist;
     }
+
+    template<int n>
+    Column<N> BoundaryOf(simplex_t s) {
+        Column<N> result{};
+        s.ForEachPoint([&](int p) {
+            // insert all n - 1 simplices by iterating over every point and removing it
+            if constexpr(n > 1) {
+                // we need to find the right max_dist too, this is probably faster than calculating it
+                auto face = cache[n - 2].unordered.find(s ^ simplex_t{p});
+                result.data.insert(*face);
+            }
+            else {
+                // for 1-simplices, the boundary consists of 0-simplices with 0 max_dist
+                result.data.insert(simplex_t{p});
+            }
+        });
+        return result;
+    }
 };
 
 template<size_t N>
@@ -122,10 +140,10 @@ void Compute<N>::FindnSimplices(float epsilon) {
             for (int j = i + 1; j < points.size(); j++) {
                 const float dist2 = Distance2(i, j);
                 if (dist2 <= 4 * epsilon * epsilon) {
-                    if (unordered_simplices.find(simplex_t{i, j}) == unordered_simplices.end()) {
-                        ordered_simplices.emplace(dist2, simplex_t{i, j});
-                        unordered_simplices.insert(simplex_t{i, j});
-                    }
+                    auto s = simplex_t{i, j};
+                    s.max_dist = dist2;
+                    ordered_simplices.emplace(s);
+                    unordered_simplices.insert(s);
                 }
             }
         }
@@ -136,9 +154,10 @@ void Compute<N>::FindnSimplices(float epsilon) {
 
         FindnSimplices<n - 1>(epsilon);
 
-        const float prev_max_dist = 4 * prev_epsilon * prev_epsilon;
-        for (auto it = cache[n - 2].ordered.lower_bound(std::make_pair(prev_max_dist, simplex_t{})); it != cache[n - 2].ordered.end(); it++) {
-            const auto [max_dist, s] = *it;
+        simplex_t lower_bound = simplex_t{};
+        lower_bound.max_dist = 4 * prev_epsilon * prev_epsilon;
+        for (auto it = cache[n - 2].ordered.lower_bound(lower_bound); it != cache[n - 2].ordered.end(); it++) {
+            const auto s = *it;
             // try every other point
             for (int i = 0; i < points.size(); i++) {
                 if (s[i]) [[unlikely]] {
@@ -151,7 +170,7 @@ void Compute<N>::FindnSimplices(float epsilon) {
                     continue;
                 }
 
-                float dist = max_dist;
+                float dist = s.max_dist;
                 if (!s.ForEachPoint([&](int p) -> bool {
                     // check whether there is a 1-simplex for every point in the simplex
                     dist = std::max(dist, Distance2(i, p));
@@ -160,7 +179,8 @@ void Compute<N>::FindnSimplices(float epsilon) {
                     }
                     return false;  // keep going, 1-simplex exists for this point
                 })) {
-                    ordered_simplices.emplace_hint(ordered_simplices.end(), dist, next);
+                    next.max_dist = dist;
+                    ordered_simplices.emplace(next);
                     unordered_simplices.insert(next);
                 }
             }
@@ -174,14 +194,14 @@ void Compute<N>::ForEachSimplex(float epsilon, const F& func) {
     // 0 simplices are always just the points
     if constexpr(n == 0) {
         for (int i = 0; i < points.size(); i++) {
-            func(0, simplex_t{i});
+            func(simplex_t{i});
         }
     }
     else {
         FindnSimplices<n>(epsilon);
-        for (auto& [dist, s] : cache[n - 1].ordered) {
-            if (dist <= 4 * epsilon * epsilon) {
-                func(dist, s);
+        for (auto& s : cache[n - 1].ordered) {
+            if (s.max_dist <= 4 * epsilon * epsilon) {
+                func(s);
             }
         }
     }

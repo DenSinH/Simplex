@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
     auto reader = std::make_unique<Reader>(argv[1]);
     auto points = reader->Read();
     auto compute = std::make_unique<Compute<MAX_POINTS>>(points);
-    constexpr Mode mode = Mode::Frontend;
+    constexpr Mode mode = Mode::Barcode;
 
     if constexpr (mode == Mode::Frontend) {
         auto frontend = std::make_unique<Frontend>(std::move(compute));
@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
         frontend->Run();
     }
     else if constexpr (mode == Mode::Barcode) {
-        auto barcode = compute->FindBarcode(0.1, 0.55, 0.005);
+        auto barcode = compute->FindBarcode(0.1, 0.6, 0.005);
         std::ofstream csv("./src/plot/barcode.csv");
         csv << "homology dimension,line index,epsilon" << std::endl;
 
