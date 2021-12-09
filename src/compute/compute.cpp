@@ -14,7 +14,7 @@ std::vector<i32> Compute<N>::FindSimplexDrawIndicesImpl([[maybe_unused]] float e
     indices.reserve(n * points.size());
     this->ComputeBase::current_simplices = 0;
 
-    ForEachSimplex<n>(epsilon, [&](simplex_t s) {
+    ForEachSimplex<n>(epsilon, [&](float dist, simplex_t s) {
         this->ComputeBase::current_simplices++;
         s.ForEachPoint([&](int p) {
             if constexpr(n < 3) {
@@ -66,9 +66,9 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
     basis_t b_basis{};
     basis_t z_basis{};
 
-    ForEachSimplex<1>(epsilon, [&](const simplex_t s) {
+    ForEachSimplex<1>(epsilon, [&](float dist, const simplex_t s) {
         auto b_col = s;
-        auto z_col = column_t{s};
+        auto z_col = column_t{dist, s};
         int low;
         for (low = b_col.FindLow(); b_col && B[low].has_value(); low = b_col.FindLow()) {
             const auto& [low_s, low_col] = B[low].value();
@@ -116,7 +116,7 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
     if constexpr(n == -1) {
         basis_t z_basis{};
         for (int i = 0; i < points.size(); i++) {
-            z_basis.push_back(column_t{simplex_t{i}});
+            z_basis.push_back(column_t{0, simplex_t{i}});
         }
         return std::make_pair(basis_t{}, z_basis);
     }
@@ -137,9 +137,9 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
         basis_t b_basis{};
         basis_t z_basis{};
 
-        ForEachSimplex<n + 1>(epsilon, [&](simplex_t s) {
+        ForEachSimplex<n + 1>(epsilon, [&](float dist, simplex_t s) {
             auto b_col = BoundaryOf<n + 1>(s);
-            auto z_col = column_t{s};
+            auto z_col = column_t{dist, s};
             simplex_t low;
             for (low = b_col.FindLow(); b_col && (B.find(low) != B.end()); low = b_col.FindLow()) {
                 const auto& [low_s, low_col] = B.at(low);
@@ -215,7 +215,7 @@ std::pair<size_t, std::vector<i32>> Compute<N>::FindHBasisDrawIndices(float epsi
 
     std::vector<i32> result{};
     for (const auto& c : h_basis) {
-        for (const auto& s : c.data) {
+        for (const auto& [d, s] : c.data) {
             s.ForEachPoint([&result](int p) {
                 result.push_back(p);
             });

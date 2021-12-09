@@ -7,14 +7,14 @@
 template<size_t N>
 struct Column {
     using simplex_t = Simplex<N>;
-    using vector_t = boost::container::flat_set<simplex_t>;
+    using vector_t = boost::container::flat_set<std::pair<float, simplex_t>>;
 
     vector_t data;
 
     Column<N>() = default;
 
-    explicit Column<N>(simplex_t s) {
-        data.insert(s);
+    explicit Column<N>(float dist, simplex_t s) : data{} {
+        data.emplace(dist, s);
     }
 
     bool Contains(const simplex_t& s) {
@@ -50,6 +50,6 @@ struct Column {
 
     simplex_t FindLow() const {
         // low element is the element that was added last (highest max distance)
-        return *data.rbegin();
+        return data.rbegin()->second;
     }
 };

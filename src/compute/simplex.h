@@ -69,13 +69,12 @@ struct func {
 template<size_t N>
 struct Simplex {
     static constexpr size_t bits = sizeof(u64) * 8;
-    float max_dist;
     std::array<u64, (N + bits - 1) / bits> points;
 
     Simplex() = default;
 
     template<typename... Args>
-    Simplex(Args... ns) : max_dist(0), points{} {
+    Simplex(Args... ns) : points{} {
         ((points[ns / bits] |= 1ull << (ns % bits)), ...);
     }
 
@@ -86,13 +85,6 @@ struct Simplex {
     bool operator<(const Simplex<N>& other) const {
         // lexographic ordering
         int i = 0, j = 0;
-
-        if (max_dist < other.max_dist) {
-            return true;
-        }
-        if (max_dist > other.max_dist) {
-            return false;
-        }
 
         // if the maximum distance is the same, take the lowest point index to be lower
         // this is very unlikely
