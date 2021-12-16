@@ -159,6 +159,7 @@ void Compute<N>::FindnSimplices(float epsilon) {
         auto lower_bound = std::make_pair(4 * prev_epsilon * prev_epsilon, simplex_t{});
         for (auto it = cache[n - 2].ordered.lower_bound(lower_bound); it != cache[n - 2].ordered.end(); it++) {
             const auto [max_dist, s] = *it;
+            auto emplace_hint = ordered_simplices.begin();
             // try every other point
             for (int i = 0; i < points.size(); i++) {
                 if (s[i]) [[unlikely]] {
@@ -180,7 +181,7 @@ void Compute<N>::FindnSimplices(float epsilon) {
                     }
                     return false;  // keep going, 1-simplex exists for this point
                 })) {
-                    ordered_simplices.emplace(dist, next);
+                    emplace_hint = ordered_simplices.emplace_hint(emplace_hint, dist, next);
                     unordered_simplices.emplace(next, dist);
                 }
             }
