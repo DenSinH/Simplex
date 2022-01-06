@@ -14,7 +14,7 @@ std::vector<i32> Compute<N>::FindSimplexDrawIndicesImpl([[maybe_unused]] float e
     indices.reserve(n * points.size());
     this->ComputeBase::current_simplices = 0;
 
-    ForEachSimplex<n>(epsilon, [&](float dist, simplex_t s) {
+    ForEachSimplex<n>(epsilon, false, [&](float dist, simplex_t s) {
         this->ComputeBase::current_simplices++;
         s.ForEachPoint([&](int p) {
             if constexpr(n < 3) {
@@ -50,7 +50,7 @@ boost::container::static_vector<std::vector<i32>, 3> Compute<N>::FindSimplexDraw
 
 
 template<size_t N>
-std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>::FindBZ0(float epsilon) {
+std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>::FindBZ0(float epsilon, bool ordered) {
     // low -> column
     // at most N points
     // store low -> simplex
@@ -66,7 +66,7 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
     basis_t b_basis{};
     basis_t z_basis{};
 
-    ForEachSimplex<1>(epsilon, [&](float dist, const simplex_t s) {
+    ForEachSimplex<1>(epsilon, ordered, [&](float dist, const simplex_t s) {
         auto b_col = s;
         auto z_col = column_t{dist, s};
         int low;
@@ -112,7 +112,7 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
 
 template<size_t N>
 template<int n>
-std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>::FindBZn(float epsilon) {
+std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>::FindBZn(float epsilon, bool ordered) {
     if constexpr(n == -1) {
         basis_t z_basis{};
         for (int i = 0; i < points.size(); i++) {
@@ -121,7 +121,7 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
         return std::make_pair(basis_t{}, z_basis);
     }
     else if constexpr(n == 0) {
-        return FindBZ0(epsilon);
+        return FindBZ0(epsilon, ordered);
     }
     else {
         // low -> column
@@ -137,7 +137,7 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
         basis_t b_basis{};
         basis_t z_basis{};
 
-        ForEachSimplex<n + 1>(epsilon, [&](float dist, simplex_t s) {
+        ForEachSimplex<n + 1>(epsilon, ordered, [&](float dist, simplex_t s) {
             auto b_col = BoundaryOf<n + 1>(s);
             auto z_col = column_t{dist, s};
             simplex_t low;
@@ -207,8 +207,8 @@ std::pair<size_t, std::vector<i32>> Compute<N>::FindHBasisDrawIndices(float epsi
     basis_t h_basis;
     detail::static_for<int, 0, MAX_HOMOLOGY_DIM>([&](auto i) {
         if (i == n) {
-            auto [b_basis, z_] = FindBZn<i>(epsilon);
-            auto [b_, z_basis] = FindBZn<i - 1>(epsilon);
+            auto [b_basis, z_] = FindBZn<i>(epsilon, false);
+            auto [b_, z_basis] = FindBZn<i - 1>(epsilon, false);
             h_basis = FindHBasis(b_basis, z_basis);
         }
     });
@@ -227,12 +227,12 @@ std::pair<size_t, std::vector<i32>> Compute<N>::FindHBasisDrawIndices(float epsi
 template<size_t N>
 std::vector<typename Compute<N>::basis_t> Compute<N>::FindHBases(float epsilon, int n) {
     std::vector<basis_t> result{};
-    basis_t z_basis = FindBZn<-1>(epsilon).second;
+    basis_t z_basis = FindBZn<-1>(epsilon, true).second;
 
     detail::static_for<int, 0, MAX_HOMOLOGY_DIM>([&](auto i) {
         if (i <= n) {
             // compute the basis for B and use the previous basis for Z to compute the next basis for H
-            auto [b_basis, z_] = FindBZn<i>(epsilon);
+            auto [b_basis, z_] = FindBZn<i>(epsilon, true);
             result.push_back(FindHBasis(b_basis, z_basis));
             // keep next basis for Z
             z_basis = std::move(z_);
@@ -243,7 +243,8 @@ std::vector<typename Compute<N>::basis_t> Compute<N>::FindHBases(float epsilon, 
 }
 
 template<size_t N>
-std::array<std::vector<std::vector<float>>, MAX_BARCODE_HOMOLOGY + 1> Compute<N>::FindBarcode(float lower_bound, float upper_bound, float de) {
+std::array<std::vector<std::vector<float>>, MAX_BARCODE_HOMOLOGY + 1>
+Compute<N>::FindBarcode(float lower_bound, float upper_bound, float de) {
     const auto num_workers = std::thread::hardware_concurrency() / 2;
 
     // create worker Compute instances
@@ -329,7 +330,8 @@ std::array<std::vector<std::vector<float>>, MAX_BARCODE_HOMOLOGY + 1> Compute<N>
 }
 
 #define INSTANTIATE_COMPUTE_METHODS(_, m, n) \
-    template std::pair<typename Compute<MIN_POINTS << (n)>::basis_t, typename Compute<MIN_POINTS << (n)>::basis_t> Compute<MIN_POINTS << (n)>::FindBZn<(m) - 1>(float epsilon);
+    template std::pair<typename Compute<MIN_POINTS << (n)>::basis_t, typename Compute<MIN_POINTS << (n)>::basis_t> \
+        Compute<MIN_POINTS << (n)>::FindBZn<(m) - 1>(float epsilon, bool ordered);
 
 #define INSTANTIATE_COMPUTE(_, n, __) \
     template struct Compute<MIN_POINTS << (n)>; \

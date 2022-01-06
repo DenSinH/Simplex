@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
     auto reader = std::make_unique<Reader>(argv[1]);
     auto points = reader->Read();
     auto compute = std::make_unique<Compute<MAX_POINTS>>(points);
-    constexpr Mode mode = Mode::Frontend;
+    constexpr Mode mode = Mode::Barcode;
 
     if constexpr (mode == Mode::Frontend) {
         auto frontend = std::make_unique<Frontend>(std::move(compute));
