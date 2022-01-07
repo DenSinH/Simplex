@@ -69,13 +69,15 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
     ForEachSimplex<1>(epsilon, [&](float dist, const simplex_t s) {
         auto b_col = s;
         auto z_col = column_t{dist, s};
-        int low;
-        for (low = b_col.FindLow(); b_col && B[low].has_value(); low = b_col.FindLow()) {
+        int low = b_col.FindLow();
+        while (B[low].has_value()) {
             const auto& [low_s, low_col] = B[low].value();
             b_col ^= low_col;
 
             // low has been found before, so we know that low_s is in Z
             z_col ^= Z.at(low_s);
+            if (!b_col) break;
+            low = b_col.FindLow();
         }
         if (b_col) {
             B[low] = std::make_pair(s, b_col);
@@ -140,13 +142,15 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
         ForEachSimplex<n + 1>(epsilon, [&](float dist, simplex_t s) {
             auto b_col = BoundaryOf<n + 1>(s);
             auto z_col = column_t{dist, s};
-            simplex_t low;
-            for (low = b_col.FindLow(); b_col && (B.find(low) != B.end()); low = b_col.FindLow()) {
+            simplex_t low = b_col.FindLow();
+            while (B.find(low) != B.end()) {
                 const auto& [low_s, low_col] = B.at(low);
                 b_col ^= low_col;
 
                 // low has been found before, so we know that low_s is in Z
                 z_col ^= Z.at(low_s);
+                if (!b_col) break;
+                low = b_col.FindLow();
             }
             if (b_col) {
                 B.emplace(low, std::make_pair(s, b_col));

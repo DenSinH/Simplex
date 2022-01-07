@@ -201,8 +201,11 @@ void Compute<N>::ForEachSimplex(float epsilon, const F& func) {
     else {
         FindnSimplices<n>(epsilon);
         for (auto& [dist, s] : cache[n - 1].ordered) {
-            if (dist <= 4 * epsilon * epsilon) {
+            if (dist <= 4 * epsilon * epsilon) [[likely]] {
                 func(dist, s);
+            }
+            else {
+              break;
             }
         }
     }
