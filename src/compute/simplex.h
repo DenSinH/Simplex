@@ -6,6 +6,7 @@
 #include <bit>
 #include <numeric>
 #include <cstring>
+#include <ranges>
 #include <boost/range/combine.hpp>
 #include <boost/foreach.hpp>
 
@@ -159,6 +160,18 @@ struct Simplex {
                 return count + bit;
             }
             count += bits;
+        }
+        return -1;
+    }
+
+    int FindHigh() const {
+        int count = bits * points.size() - 1;
+        for (auto section : std::ranges::reverse_view(points)) {
+            if (section) {
+                int bit = std::countl_zero(section);
+                return count - bit;
+            }
+            count -= bits;
         }
         return -1;
     }
