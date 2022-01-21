@@ -1,5 +1,5 @@
 cmake-*/
 .idea/
 *.data
-*.csv
+src/**/*.csv
 *.ini

@@ -339,7 +339,7 @@ void Frontend::Run() {
             glDrawElements(draw_type[homology_dim], h_basis_vertices, GL_UNSIGNED_INT, nullptr);
 
             if (homology_dim < 2) {
-                static constexpr float alpha_values[] = { 0.3, 0.1 };
+                static constexpr float alpha_values[] = { 0.3, 0.05 };
 
                 // also show higher dimensional simplices with lower alpha value
                 if (no_vertices[homology_dim + 1]) {

@@ -155,17 +155,8 @@ void Compute<N>::FindnSimplices(float epsilon) {
         for (const auto [s, max_dist] : cache[n - 2].unordered) {
             if (max_dist < 4 * prev_epsilon * prev_epsilon) [[likely]] continue;
             // try every other point
-            for (int i = 0; i < points.size(); i++) {
-                if (s[i]) [[unlikely]] {
-                    // point is already contained in the simplex
-                    continue;
-                }
-                auto next = s | simplex_t{i};
-                if (unordered_simplices.find(next) != unordered_simplices.end()) {
-                    // simplex is already found
-                    continue;
-                }
-
+            for (int i = s.FindHigh() + 1; i < points.size(); i++) {
+                const auto next = s | simplex_t{i};
                 float dist = max_dist;
                 if (!s.ForEachPoint([&](int p) -> bool {
                     // check whether there is a 1-simplex for every point in the simplex
@@ -194,7 +185,6 @@ void Compute<N>::ForEachSimplex(float epsilon, bool ordered, const F& func) {
     }
     else {
         FindnSimplices<n>(epsilon);
-
         if (ordered) {
           boost::container::flat_set<std::pair<float, simplex_t>> ordered{};
           ordered.reserve(cache[n - 1].unordered.size());

@@ -3,6 +3,14 @@
 
 #include <memory>
 #include <fstream>
+#include <string>
+#include <algorithm>
+
+
+/*
+ * In order to change the maximum homology dimension or the maximum amount of points that can be passed,
+ * edit the file include/default.h and rebuild!
+ * */
 
 
 enum class Mode {
@@ -14,19 +22,52 @@ enum class Mode {
 
 
 int main(int argc, char** argv) {
+    if (argc == 1) {
+      std::printf("Please enter a file with points\n");
+      exit(1);
+    }
     auto reader = std::make_unique<Reader>(argv[1]);
     auto points = reader->Read();
     auto compute = std::make_unique<Compute<MAX_POINTS>>(points);
-    constexpr Mode mode = Mode::Barcode;
+    Mode mode;
+    if (argc == 2) {
+        mode = Mode::Frontend;
+    }
+    else {
+        std::string mode_string{argv[2]};
+        std::transform(mode_string.begin(), mode_string.end(), mode_string.begin(), [](char c) { return std::tolower(c); });
+        if (mode_string == "frontend") mode = Mode::Frontend;
+        else if (mode_string == "barcode") mode = Mode::Barcode;
+        else {
+           std::printf("Please enter a valid mode (frontend or barcode), got %s\n", argv[2]);
+           exit(1);
+        }
+    }
 
-    if constexpr (mode == Mode::Frontend) {
+    if (mode == Mode::Frontend) {
         auto frontend = std::make_unique<Frontend>(std::move(compute));
 
         frontend->Run();
     }
-    else if constexpr (mode == Mode::Barcode) {
-        auto barcode = compute->FindBarcode(0.1, 0.6, 0.005);
-        std::ofstream csv("./src/plot/barcode.csv");
+    else if (mode == Mode::Barcode) {
+        if (argc < 7) {
+            std::printf("Please enter valid parameters for the barcode (start, end, step, output_file)\n");
+            exit(1);
+        }
+        double start, end, step;
+        try {
+            start = std::stod(argv[3]);
+            end = std::stod(argv[4]);
+            step = std::stod(argv[5]);
+        }
+        catch (std::out_of_range) {
+            std::printf("Could not parse start, end or step, please enter valid floating point values\n");
+            exit(1);
+        }
+        std::string output_file = argv[6];
+
+        auto barcode = compute->FindBarcode(start, end, step);
+        std::ofstream csv(output_file);
         csv << "homology dimension,line index,epsilon" << std::endl;
 
         for (int dim = 0; dim < barcode.size(); dim++) {
@@ -37,7 +78,7 @@ int main(int argc, char** argv) {
             }
         }
     }
-    else if constexpr (mode == Mode::Benchmark) {
+    else if (mode == Mode::Benchmark) {
         // manual benchmark
 //        constexpr size_t dim = 3;
 //        auto fut = std::async(std::launch::async, &ComputeBase::FindHBasisDrawIndices, compute.get(), 1.6, 2);
@@ -53,11 +94,11 @@ int main(int argc, char** argv) {
 //        std::printf("%llu basis vectors\n", result.first);
 
         // for AMD uProf
-        auto [dim, _] = compute->FindHBasisDrawIndices(1.6, 2);
+        auto [dim, _] = compute->FindHBasisDrawIndices(0.2, 2);
         std::printf("%lld\n", dim);
     }
     else {
-        compute->FindHBasisDrawIndices(0.3, 1);
+        compute->FindHBasisDrawIndices(0.2, 1);
     }
     return 0;
 }
