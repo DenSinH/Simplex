@@ -127,7 +127,7 @@ void Compute<N>::FindnSimplices(float epsilon) {
         return;
     }
     const float prev_epsilon = cache[n - 1].max_epsilon;
-    cache[n - 1].max_epsilon = epsilon;
+    cache[n - 1].max_epsilon = std::max(prev_epsilon, epsilon);
 
     // 1 simplices are special since we can use them for the higher order simplices
     if constexpr(n == 1) {
@@ -187,7 +187,7 @@ void Compute<N>::ForEachSimplex(float epsilon, bool ordered, const F& func) {
         FindnSimplices<n>(epsilon);
         if (ordered) {
           boost::container::flat_set<std::pair<float, simplex_t>> ordered_simplices{};
-              ordered_simplices.reserve(cache[n - 1].unordered.size());
+          ordered_simplices.reserve(cache[n - 1].unordered.size());
           for (const auto& [simplex, dist] : cache[n - 1].unordered) {
               ordered_simplices.emplace(dist, simplex);
           }
