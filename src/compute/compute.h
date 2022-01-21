@@ -33,7 +33,7 @@ template<size_t N>
 struct Compute final : ComputeBase {
     using simplex_t = Simplex<N>;
     using column_t = Column<N>;
-    using basis_t = std::vector<column_t>;
+    using basis_t = std::vector<std::pair<simplex_t, column_t>>;
 
     struct SimplexCache {
         float max_epsilon = {};
@@ -62,11 +62,11 @@ struct Compute final : ComputeBase {
     // reduce a basis for Z to a basis of H given a basis for B
     basis_t FindHBasis(const basis_t& B, const basis_t& Z) const;
 
-    // find a vector of H bases for all dimensions lower or equal to the given dimension
-    std::vector<basis_t> FindHBases(float epsilon, int n);
+    // find B - Z pairs for given B and Z (labeled) bases
+    std::vector<std::pair<simplex_t, simplex_t>> FindBZBasisPairs(const basis_t& B, const basis_t& Z) const;
 
     // find a barcode given a range of epsilons
-    std::array<std::vector<std::vector<float>>, MAX_BARCODE_HOMOLOGY + 1> FindBarcode(float lower_bound, float upper_bound, float de);
+    std::array<std::vector<std::pair<float, float>>, MAX_BARCODE_HOMOLOGY + 1> FindBarcode(float upper_bound);
 
 private:
     template<size_t n>
@@ -186,22 +186,22 @@ void Compute<N>::ForEachSimplex(float epsilon, bool ordered, const F& func) {
     else {
         FindnSimplices<n>(epsilon);
         if (ordered) {
-          boost::container::flat_set<std::pair<float, simplex_t>> ordered{};
-          ordered.reserve(cache[n - 1].unordered.size());
+          boost::container::flat_set<std::pair<float, simplex_t>> ordered_simplices{};
+              ordered_simplices.reserve(cache[n - 1].unordered.size());
           for (const auto& [simplex, dist] : cache[n - 1].unordered) {
-            ordered.emplace(dist, simplex);
+              ordered_simplices.emplace(dist, simplex);
           }
-          for (const auto& [dist, simplex] : ordered) {
-            if (dist > 4 * epsilon * epsilon) break;
-            func(dist, simplex);
+          for (const auto& [dist, simplex] : ordered_simplices) {
+              if (dist > 4 * epsilon * epsilon) break;
+              func(dist, simplex);
           }
         }
         else {
-          for (const auto& [simplex, dist] : cache[n - 1].unordered) {
-            if (dist <= 4 * epsilon * epsilon) {
-              func(dist, simplex);
+            for (const auto& [simplex, dist] : cache[n - 1].unordered) {
+                if (dist <= 4 * epsilon * epsilon) {
+                    func(dist, simplex);
+                }
             }
-          }
         }
     }
 }

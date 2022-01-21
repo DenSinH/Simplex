@@ -50,31 +50,27 @@ int main(int argc, char** argv) {
         frontend->Run();
     }
     else if (mode == Mode::Barcode) {
-        if (argc < 7) {
-            std::printf("Please enter valid parameters for the barcode (start, end, step, output_file)\n");
+        if (argc < 5) {
+            std::printf("Please enter valid parameters for the barcode (end, output_file), got %d parameters\n", argc);
             exit(1);
         }
-        double start, end, step;
+        double end;
         try {
-            start = std::stod(argv[3]);
-            end = std::stod(argv[4]);
-            step = std::stod(argv[5]);
+            end = std::stod(argv[3]);
         }
         catch (std::out_of_range) {
-            std::printf("Could not parse start, end or step, please enter valid floating point values\n");
+            std::printf("Could not parse barcode end, please enter valid floating point values\n");
             exit(1);
         }
-        std::string output_file = argv[6];
+        std::string output_file = argv[4];
 
-        auto barcode = compute->FindBarcode(start, end, step);
+        auto barcode = compute->FindBarcode(end);
         std::ofstream csv(output_file);
-        csv << "homology dimension,line index,epsilon" << std::endl;
+        csv << "homology dimension,start,end" << std::endl;
 
         for (int dim = 0; dim < barcode.size(); dim++) {
-            for (int i = 0; i < barcode[dim].size(); i++) {
-                for (float eps : barcode[dim][i]) {
-                    csv << dim << "," << i << "," << eps << std::endl;
-                }
+            for (const auto [start, end] : barcode[dim]) {
+                csv << dim << "," << start << "," << end << std::endl;
             }
         }
     }

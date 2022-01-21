@@ -4,6 +4,7 @@
 
 #include <thread>
 #include <future>
+#include <limits>
 #include <boost/preprocessor/repetition/repeat.hpp>
 
 
@@ -83,7 +84,7 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
             B[low] = std::make_pair(s, b_col);
 
             // this column will never be added to again and is non-zero
-            b_basis.push_back(BoundaryOf<1>(s));
+            b_basis.emplace_back(s, BoundaryOf<1>(s));
 
             // this column has not been added to Z yet (low never found)
             Z.emplace(s, z_col);
@@ -91,13 +92,13 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
         else {
             // column will never be read from again in Z, since it ends up being zero
             // it is part of the z_basis though
-            z_basis.push_back(z_col);
+            z_basis.emplace_back(s, z_col);
         }
     });
 
     // reduce B basis (unique low)
     z_matrix_t reduced{};
-    for (auto& c : b_basis) {
+    for (auto& [_, c] : b_basis) {
         auto low = c.FindLow();
         while (reduced.find(low) != reduced.end()) {
             c ^= reduced.at(low);
@@ -118,7 +119,7 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
     if constexpr(n == -1) {
         basis_t z_basis{};
         for (int i = 0; i < points.size(); i++) {
-            z_basis.push_back(column_t{0, simplex_t{i}});
+            z_basis.emplace_back(simplex_t{i}, column_t{0, simplex_t{i}});
         }
         return std::make_pair(basis_t{}, z_basis);
     }
@@ -156,7 +157,7 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
                 B.emplace(low, std::make_pair(s, b_col));
 
                 // this column will never be added to again and is non-zero
-                b_basis.push_back(b_col);
+                b_basis.emplace_back(s, b_col);
 
                 // this column has not been added to Z yet (low never found)
                 Z.emplace(s, z_col);
@@ -164,7 +165,7 @@ std::pair<typename Compute<N>::basis_t, typename Compute<N>::basis_t> Compute<N>
             else {
                 // column will never be read from again in Z, since it ends up being zero
                 // it is part of the z_basis though
-                z_basis.push_back(z_col);
+                z_basis.emplace_back(s, z_col);
             }
         });
 
@@ -179,7 +180,7 @@ typename Compute<N>::basis_t Compute<N>::FindHBasis(const basis_t& B, const basi
     // reduce Z basis to a basis of H
     // basically just sweep the lowest elements
     boost::unordered_map<simplex_t, column_t> reduced{};
-    for (column_t c : Z) {
+    for (auto [_, c] : Z) {
         auto low = c.FindLow();
         while (reduced.find(low) != reduced.end()) {
             c ^= reduced.at(low);
@@ -194,14 +195,14 @@ typename Compute<N>::basis_t Compute<N>::FindHBasis(const basis_t& B, const basi
         reduced.emplace(low, c);
     }
 
-    for (const column_t& c : B) {
+    for (const auto& [_, c] : B) {
         auto low = c.FindLow();
         reduced.erase(low);
     }
 
     basis_t result{};
     for (auto [s, c] : reduced) {
-        result.push_back(c);
+        result.emplace_back(s, c);
     }
     return std::move(result);
 }
@@ -218,7 +219,7 @@ std::pair<size_t, std::vector<i32>> Compute<N>::FindHBasisDrawIndices(float epsi
     });
 
     std::vector<i32> result{};
-    for (const auto& c : h_basis) {
+    for (const auto& [_, c] : h_basis) {
         for (const auto& [d, s] : c.data) {
             s.ForEachPoint([&result](int p) {
                 result.push_back(p);
@@ -229,108 +230,62 @@ std::pair<size_t, std::vector<i32>> Compute<N>::FindHBasisDrawIndices(float epsi
 }
 
 template<size_t N>
-std::vector<typename Compute<N>::basis_t> Compute<N>::FindHBases(float epsilon, int n) {
-    std::vector<basis_t> result{};
-    basis_t z_basis = FindBZn<-1>(epsilon, true).second;
-
-    detail::static_for<int, 0, MAX_HOMOLOGY_DIM>([&](auto i) {
-        if (i <= n) {
-            // compute the basis for B and use the previous basis for Z to compute the next basis for H
-            auto [b_basis, z_] = FindBZn<i>(epsilon, true);
-            result.push_back(FindHBasis(b_basis, z_basis));
-            // keep next basis for Z
-            z_basis = std::move(z_);
+std::vector<std::pair<typename Compute<N>::simplex_t, typename Compute<N>::simplex_t>>
+Compute<N>::FindBZBasisPairs(const basis_t& B, const basis_t& Z) const {
+    // reduce Z basis to a basis of H
+    // basically just sweep the lowest elements
+    boost::unordered_map<simplex_t, std::pair<simplex_t, column_t>> reduced{};
+    for (auto [s, c] : Z) {
+        auto low = c.FindLow();
+        while (reduced.find(low) != reduced.end()) {
+            c ^= reduced.at(low).second;
+            low = c.FindLow();
         }
-    });
 
+        reduced.emplace(low, std::make_pair(s, c));
+    }
+
+    std::vector<std::pair<simplex_t, simplex_t>> result{};
+    for (const auto& [s, c] : B) {
+        auto low = c.FindLow();
+        result.emplace_back(s, reduced.at(low).first);
+        reduced.erase(low);
+    }
+
+    for (const auto& [s, _] : reduced) {
+        // non-paired columns
+        result.emplace_back(simplex_t{}, s);
+    }
     return result;
 }
 
 template<size_t N>
-std::array<std::vector<std::vector<float>>, MAX_BARCODE_HOMOLOGY + 1>
-Compute<N>::FindBarcode(float lower_bound, float upper_bound, float de) {
-    const auto num_workers = std::thread::hardware_concurrency() / 2;
+std::array<std::vector<std::pair<float, float>>, MAX_BARCODE_HOMOLOGY + 1>
+Compute<N>::FindBarcode(float upper_bound) {
+    std::array<std::vector<std::pair<float, float>>, MAX_BARCODE_HOMOLOGY + 1> result{};
+    basis_t z_basis = FindBZn<-1>(upper_bound, true).second;
 
-    // create worker Compute instances
-    std::vector<std::unique_ptr<Compute<N>>> workers{};
-    workers.reserve(num_workers);
-    for (int i = 0; i < num_workers; i++) {
-        workers.push_back(std::make_unique<Compute<N>>(points));
-    }
-
-    // futures and labeled results
-    // when we return we do not care what the low value was anymore, but for collecting the results we do
-    std::vector<std::pair<float, std::future<std::vector<basis_t>>>> futures;
-    futures.resize(num_workers);
-    std::array<boost::unordered_map<simplex_t, std::vector<float>>, MAX_BARCODE_HOMOLOGY + 1> labeled_results{};
-
-    // keep track of epsilon per basis vector low simplex
-    auto parse_results = [&](float eps, std::vector<basis_t>& bases) {
-        for (int dim = 0; dim < bases.size(); dim++) {
-            std::printf("Got basis for H%d at eps = %f of size %llu\n", dim, eps, bases[dim].size());
-            for (auto& c : bases[dim]) {
-                const auto low = c.FindLow();
-
-                if (labeled_results[dim].find(low) == labeled_results[dim].end()) {
-                    labeled_results[dim][low] = {};
+    detail::static_for<int, 0, MAX_HOMOLOGY_DIM>([&](auto i) {
+        if (i <= MAX_BARCODE_HOMOLOGY) {
+            // compute the basis for B and use the previous basis for Z to compute the next basis for H
+            auto [b_basis, z_] = FindBZn<i>(upper_bound, true);
+            const auto pairs = FindBZBasisPairs(b_basis, z_basis);
+            for (const auto& [b, z] : pairs) {
+                float z_dist = i == 0 ? 0 : cache[i - 1].unordered.at(z);
+                if (b) [[likely]] {
+                    // NOT a basis vector for H
+                    result[i].emplace_back(z_dist, cache[i].unordered.at(b));
                 }
-                labeled_results[dim].at(low).push_back(eps);
-            }
-        }
-    };
-
-    // with optimized caching this will be way faster
-    float epsilon = upper_bound;
-    while (epsilon > lower_bound) {
-        int i;
-        for (i = 0; i < num_workers; i++) {
-            if (futures[i].second.valid()) {
-                // get results
-                if (futures[i].second.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
-                    auto& [eps, fut] = futures[i];
-                    auto bases = fut.get();
-                    parse_results(eps, bases);
+                else {
+                    // basis vector for H
+                    result[i].emplace_back(z_dist, std::numeric_limits<float>::infinity());
                 }
             }
-
-            // spawn worker for new epsilon
-            if (!futures[i].second.valid()) {
-                std::printf("Launching for %f\n", epsilon);
-                futures[i] = std::make_pair(epsilon, std::async(
-                        std::launch::async, &Compute<N>::FindHBases, workers[i].get(), epsilon, MAX_BARCODE_HOMOLOGY
-                ));
-                break;
-            }
+            // keep next basis for Z
+            z_basis = std::move(z_);
         }
-
-        // no available worker found
-        if (i == num_workers) {
-            // wait for worker (choice is rather arbitrary)
-            futures[0].second.wait();
-        }
-        else {
-            epsilon -= de;
-        }
-    }
-
-    // get leftover results
-    for (auto& [eps, fut] : futures) {
-        if (fut.valid()) {
-            fut.wait();
-            auto bases = fut.get();
-            parse_results(eps, bases);
-        }
-    }
-
-    // convert labeled_results into unlabeled results
-    std::array<std::vector<std::vector<float>>, MAX_BARCODE_HOMOLOGY + 1> results{};
-    for (int dim = 0; dim < labeled_results.size(); dim++) {
-        for (auto&& [k, v] : labeled_results[dim]) {
-            results[dim].push_back(v);
-        }
-    }
-
-    return results;
+    });
+    return result;
 }
 
 #define INSTANTIATE_COMPUTE_METHODS(_, m, n) \
