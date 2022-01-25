@@ -148,12 +148,7 @@ void Compute<N>::FindnSimplices(float epsilon) {
 
         FindnSimplices<n - 1>(epsilon);
 
-        // any lower ones we have already found
-        // if we use a simplex with a lower max distance and find a new one with the current simplex, we
-        // could have just replaced one of the points with the new point, and the max distance will be
-        // the current one
         for (const auto [s, max_dist] : cache[n - 2].unordered) {
-            if (max_dist < 4 * prev_epsilon * prev_epsilon) [[likely]] continue;
             // try every other point
             for (int i = s.FindHigh() + 1; i < points.size(); i++) {
                 const auto next = s | simplex_t{i};

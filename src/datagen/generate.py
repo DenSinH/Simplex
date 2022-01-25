@@ -39,8 +39,10 @@ if __name__ == '__main__':
     )
 
     with open("points.csv", "w+") as f:
-        for p in generate_random(sphere, 100, [2 * 3.1416, 3.1416], stddev=0.02):
-            f.write(",".join(str(coord) for coord in p) + "\n")
-        # for phi in range(50):
-        #     for theta in range(10):
-        #         f.write(",".join(str(coord) for coord in torus(2 * phi * 3.1416 / 50, 2 * theta * 3.1416 / 10)) + "\n")
+        # for p in generate_random(sphere, 100, [2 * 3.1416, 3.1416], stddev=0.02):
+        #     f.write(",".join(str(coord) for coord in p) + "\n")
+        MAX_PHI = 50
+        MAX_THETA = 8
+        for phi in range(MAX_PHI):
+            for theta in range(MAX_THETA):
+                f.write(",".join(str(coord) for coord in torus(2 * phi * 3.1416 / MAX_PHI, 2 * theta * 3.1416 / MAX_THETA)) + "\n")

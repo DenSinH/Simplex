@@ -18,7 +18,10 @@ max_eps = math.sqrt(max(data[data["end"] < float("inf")]["end"])) / 2
 for d, dim in data.groupby("homology dimension"):
     color = cmap(d / max_dim)
     for line, row in dim.iterrows():
-        if abs(row["start"] - row["end"]) > 0.02:
+        if row["end"] <= 0.125:
+            continue
+
+        if abs(row["start"] - row["end"]) > 0.1:
             plt.plot((math.sqrt(row["start"]) / 2, min(math.sqrt(row["end"]) / 2, max_eps)), (height, height), color=color)
             height += 1
     plt.plot(np.linspace(0, max_eps, num=20), (height - 0.5) * np.ones(20), linestyle="--", color="black")
@@ -28,5 +31,5 @@ plt.title(title)
 plt.xlim(0, max_eps)
 plt.xlabel(r"$\epsilon$")
 plt.yticks([])
-plt.savefig("barcode.png", dpi=400, bbox_inches="tight")
+plt.savefig(f"{title.lower()}_barcode.png", dpi=400, bbox_inches="tight")
 plt.show()
